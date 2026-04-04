@@ -8,7 +8,8 @@
       "Bash(npm pack:*)",
       "Bash(npm test:*)",
       "Bash(node --test test/config.test.js test/validators.test.js)",
-      "Bash(npm publish:*)"
+      "Bash(npm publish:*)",
+      "Bash(node -e ':*)"
     ]
   }
 }

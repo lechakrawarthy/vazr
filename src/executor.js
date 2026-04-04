@@ -2,7 +2,8 @@
 
 const fs = require('fs');
 const path = require('path');
-const trash = require('trash');
+const _trashModule = require('trash');
+const trash = _trashModule.default || _trashModule;
 
 function ensureDir(dirPath) {
   if (!fs.existsSync(dirPath)) fs.mkdirSync(dirPath, { recursive: true });
