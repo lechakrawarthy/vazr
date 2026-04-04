@@ -1,13 +1,16 @@
 {
   "name": "@lechakrawarthy/vazr",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Terminal UI for finding and eliminating disk bloat",
-  "author": "chakrawarthy",
+  "author": "lechakrawarthy",
   "license": "MIT",
   "homepage": "https://github.com/lechakrawarthy/vazr",
   "repository": {
     "type": "git",
-    "url": "https://github.com/lechakrawarthy/vazr.git"
+    "url": "git+https://github.com/lechakrawarthy/vazr.git"
+  },
+  "bugs": {
+    "url": "https://github.com/lechakrawarthy/vazr/issues"
   },
   "keywords": [
     "disk",
@@ -25,26 +28,21 @@
     "node": ">=18.0.0"
   },
   "scripts": {
-    "dev": "node ./bin/vazr.js --dry-run",
     "start": "node ./bin/vazr.js",
-    "test": "node --test"
+    "test": "node --test test/*.test.js"
   },
   "bin": {
-    "vazr": "./bin/vazr.js"
+    "vazr": "bin/vazr.js"
   },
   "files": [
     "bin/",
     "src/",
     "README.md"
   ],
-  "main": "./src/index.js",
   "dependencies": {
     "chalk": "4.1.2",
-    "cli-progress": "3.12.0",
-    "cli-table3": "0.6.3",
     "commander": "11.1.0",
     "inquirer": "8.2.7",
-    "ora": "5.4.1",
     "trash": "8.1.1"
   }
 }

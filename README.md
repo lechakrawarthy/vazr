@@ -1,7 +1,7 @@
-# vazr
+# @lechakrawarthy/vazr
 
-[![npm version](https://img.shields.io/npm/v/vazr.svg)](https://npmjs.com/package/vazr)
-[![npm downloads](https://img.shields.io/npm/dm/vazr.svg)](https://npmjs.com/package/vazr)
+[![npm version](https://img.shields.io/npm/v/@lechakrawarthy/vazr.svg)](https://www.npmjs.com/package/@lechakrawarthy/vazr)
+[![npm downloads](https://img.shields.io/npm/dm/@lechakrawarthy/vazr.svg)](https://www.npmjs.com/package/@lechakrawarthy/vazr)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 [![Node.js >=18](https://img.shields.io/badge/node-%3E%3D18-brightgreen)]()
 
@@ -18,26 +18,19 @@
 - Audit logging to a local log file
 - Works on **Windows**, **macOS**, and **Linux**
 - Live spinner during scan so you always know it's working
-- Dashboard-style summary table with category share and largest-file preview
+- Dashboard-style summary with category share and largest-file preview
 
 ## Quick Start (no install)
 
 ```bash
-npx vazr
+npx @lechakrawarthy/vazr
 ```
 
 ## Install globally
 
 ```bash
-npm install -g vazr
+npm install -g @lechakrawarthy/vazr
 vazr
-```
-
-## Local development
-
-```bash
-npm install
-npm run dev
 ```
 
 ## Usage
@@ -81,7 +74,7 @@ vazr --force-delete
 vazr --min-media 50 --old-days 14
 
 # Run with npx, dry-run first
-npx vazr --dry-run
+npx @lechakrawarthy/vazr --dry-run
 ```
 
 ## What it scans
@@ -125,7 +118,7 @@ Default search paths for config:
 - `~/.vazr/config.json`
 - `~/.vazr.json`
 
-You can override with `--config` or `VAZR_CONFIG`.
+You can override with `--config` or `VAZR_CONFIG` environment variable.
 
 ## Audit log
 
@@ -134,13 +127,6 @@ By default logs are written to:
 - `~/.vazr/logs/cleanup.log`
 
 Override with `--log-file`.
-
-## Publishing to npm
-
-```bash
-npm login
-npm publish --access public
-```
 
 ## License
 
