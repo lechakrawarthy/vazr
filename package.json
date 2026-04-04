@@ -1,5 +1,5 @@
 {
-  "name": "vazr",
+  "name": "@lechakrawarthy/vazr",
   "version": "1.0.0",
   "description": "Terminal UI for finding and eliminating disk bloat",
   "author": "chakrawarthy",
