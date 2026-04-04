@@ -14,8 +14,8 @@ const {
 const program = new Command();
 
 program
-  .name('disk-cleanup')
-  .description('Interactive terminal UI to scan and clean junk files from your system')
+  .name('vazr')
+  .description('Terminal UI for finding and eliminating disk bloat')
   .version(pkg.version, '-v, --version')
 
   .option(
@@ -47,11 +47,11 @@ program
 
   .addHelpText('after', `
 Examples:
-  $ disk-cleanup
-  $ disk-cleanup --dry-run
-  $ disk-cleanup --target D:\\Archive
-  $ disk-cleanup --min-media 50 --old-days 30
-  $ npx disk-cleanup-tui --dry-run
+  $ vazr
+  $ vazr --dry-run
+  $ vazr --target D:\\Archive
+  $ vazr --min-media 50 --old-days 30
+  $ npx vazr --dry-run
   `)
   .parse(process.argv);
 

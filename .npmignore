@@ -1,0 +1,17 @@
+# Development only
+.github/
+test/
+coverage/
+*.test.js
+*.spec.js
+
+# Build artifacts
+*.map
+
+# Design / dev server
+design.html
+serve-design.js
+
+# Local config
+.env
+.DS_Store

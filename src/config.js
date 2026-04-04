@@ -4,10 +4,10 @@ const fs = require('fs');
 const os = require('os');
 const path = require('path');
 
-const APP_DIR = path.join(os.homedir(), '.disk-cleanup-tui');
+const APP_DIR = path.join(os.homedir(), '.vazr');
 const DEFAULT_CONFIG_PATHS = [
     path.join(APP_DIR, 'config.json'),
-    path.join(os.homedir(), '.disk-cleanup-tui.json'),
+    path.join(os.homedir(), '.vazr.json'),
 ];
 
 function getDefaultOptions() {
@@ -24,7 +24,7 @@ function getDefaultOptions() {
 
 function findConfigPath(customPath) {
     if (customPath) return customPath;
-    if (process.env.DISK_CLEANUP_CONFIG) return process.env.DISK_CLEANUP_CONFIG;
+    if (process.env.VAZR_CONFIG) return process.env.VAZR_CONFIG;
 
     for (const candidate of DEFAULT_CONFIG_PATHS) {
         if (fs.existsSync(candidate)) return candidate;

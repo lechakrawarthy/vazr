@@ -1,6 +1,11 @@
-# disk-cleanup-tui
+# vazr
 
-> Interactive terminal UI to scan, review, and clean junk files from your system — like `npkill` but for everything.
+[![npm version](https://img.shields.io/npm/v/vazr.svg)](https://npmjs.com/package/vazr)
+[![npm downloads](https://img.shields.io/npm/dm/vazr.svg)](https://npmjs.com/package/vazr)
+[![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
+[![Node.js >=18](https://img.shields.io/badge/node-%3E%3D18-brightgreen)]()
+
+> Terminal UI for finding and eliminating disk bloat — like `npkill` but for everything.
 
 ## Features
 
@@ -18,14 +23,14 @@
 ## Quick Start (no install)
 
 ```bash
-npx disk-cleanup-tui
+npx vazr
 ```
 
 ## Install globally
 
 ```bash
-npm install -g disk-cleanup-tui
-disk-cleanup
+npm install -g vazr
+vazr
 ```
 
 ## Local development
@@ -38,7 +43,7 @@ npm run dev
 ## Usage
 
 ```
-Usage: disk-cleanup [options]
+Usage: vazr [options]
 
 Options:
   -v, --version          Show version number
@@ -58,25 +63,25 @@ Options:
 
 ```bash
 # Standard interactive run
-disk-cleanup
+vazr
 
 # Safe preview — nothing will be changed
-disk-cleanup --dry-run
+vazr --dry-run
 
 # Use a custom destination drive
-disk-cleanup --target "D:\Archive"
+vazr --target "D:\Archive"
 
 # Persist settings in a config file
-disk-cleanup --config "C:\Users\you\.disk-cleanup-tui\config.json"
+vazr --config "C:\Users\you\.vazr\config.json"
 
 # Force permanent deletes (extra confirmation prompt appears)
-disk-cleanup --force-delete
+vazr --force-delete
 
 # More aggressive — flag media >= 50 MB, downloads >= 14 days old
-disk-cleanup --min-media 50 --old-days 14
+vazr --min-media 50 --old-days 14
 
 # Run with npx, dry-run first
-npx disk-cleanup-tui --dry-run
+npx vazr --dry-run
 ```
 
 ## What it scans
@@ -110,34 +115,31 @@ You can set defaults in JSON:
   "minMediaMB": 100,
   "minLargeMB": 500,
   "oldDays": 60,
-  "logFile": "C:\\Users\\you\\.disk-cleanup-tui\\logs\\cleanup.log",
+  "logFile": "C:\\Users\\you\\.vazr\\logs\\cleanup.log",
   "forceDelete": false
 }
 ```
 
 Default search paths for config:
 
-- `~/.disk-cleanup-tui/config.json`
-- `~/.disk-cleanup-tui.json`
+- `~/.vazr/config.json`
+- `~/.vazr.json`
 
-You can override with `--config` or `DISK_CLEANUP_CONFIG`.
+You can override with `--config` or `VAZR_CONFIG`.
 
 ## Audit log
 
 By default logs are written to:
 
-- `~/.disk-cleanup-tui/logs/cleanup.log`
+- `~/.vazr/logs/cleanup.log`
 
 Override with `--log-file`.
 
 ## Publishing to npm
 
 ```bash
-# Make sure you're logged in
 npm login
-
-# Publish
-npm publish
+npm publish --access public
 ```
 
 ## License

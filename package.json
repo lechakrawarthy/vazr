@@ -1,13 +1,13 @@
 {
-  "name": "disk-cleanup-tui",
+  "name": "vazr",
   "version": "1.0.0",
-  "description": "Interactive terminal UI to scan, clean, and offload junk files from your system",
+  "description": "Terminal UI for finding and eliminating disk bloat",
   "author": "chakrawarthy",
   "license": "MIT",
-  "homepage": "https://github.com/yourusername/disk-cleanup-tui",
+  "homepage": "https://github.com/lechakrawarthy/vazr",
   "repository": {
     "type": "git",
-    "url": "https://github.com/yourusername/disk-cleanup-tui"
+    "url": "https://github.com/lechakrawarthy/vazr.git"
   },
   "keywords": [
     "disk",
@@ -25,12 +25,12 @@
     "node": ">=18.0.0"
   },
   "scripts": {
-    "dev": "node ./bin/cleanup.js --dry-run",
-    "start": "node ./bin/cleanup.js",
+    "dev": "node ./bin/vazr.js --dry-run",
+    "start": "node ./bin/vazr.js",
     "test": "node --test"
   },
   "bin": {
-    "disk-cleanup": "./bin/cleanup.js"
+    "vazr": "./bin/vazr.js"
   },
   "files": [
     "bin/",
