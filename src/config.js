@@ -13,7 +13,7 @@ const DEFAULT_CONFIG_PATHS = [
 function getDefaultOptions() {
     return {
         dryRun: false,
-        target: process.platform === 'win32' ? 'H:\\dev_hardware_moved' : null,
+        target: null,
         minMediaMB: 100,
         minLargeMB: 500,
         oldDays: 60,

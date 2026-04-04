@@ -75,7 +75,18 @@ try {
   runtimeOptions.configPath = loadedConfig.configPath;
 
   if (runtimeOptions.target) {
-    assertTargetPathSafe(runtimeOptions.target);
+    try {
+      assertTargetPathSafe(runtimeOptions.target);
+    } catch (targetErr) {
+      const msg = String(targetErr && targetErr.message ? targetErr.message : targetErr);
+      if (msg.includes('Target drive or root path does not exist')) {
+        console.error(chalk.yellow('\n  Warning: Configured target is currently unavailable: ' + runtimeOptions.target));
+        console.error(chalk.yellow('  The app will let you choose another drive or continue in delete-only mode.\n'));
+        runtimeOptions.target = null;
+      } else {
+        throw targetErr;
+      }
+    }
   }
 } catch (err) {
   console.error(chalk.red('\n  Invalid configuration: ' + err.message));

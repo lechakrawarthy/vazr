@@ -43,7 +43,7 @@ Usage: disk-cleanup [options]
 Options:
   -v, --version          Show version number
   -t, --target <path>    Destination path for moved files
-                         Default (Windows): H:\dev_hardware_moved
+                         If not provided, app prompts to choose a drive or continue delete-only
   --config <path>        Path to JSON config file
   --log-file <path>      Path to log file
   --force-delete         Permanently delete (bypass Trash/Recycle Bin)
@@ -98,6 +98,7 @@ Files set to "Move" are placed in your target drive preserving their original fo
 - By default, delete operations go to OS Trash/Recycle Bin.
 - `--force-delete` enables permanent delete and requires typing `DELETE` to continue.
 - When no destination is available, move-only categories automatically switch to safe alternatives.
+- On startup, if destination is missing/unavailable, the app lets you pick an available drive or continue in delete-only mode.
 
 ## Config file
 

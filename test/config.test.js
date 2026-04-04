@@ -6,7 +6,12 @@ const fs = require('fs');
 const os = require('os');
 const path = require('path');
 
-const { loadConfig, buildRuntimeOptions } = require('../src/config');
+const { loadConfig, buildRuntimeOptions, getDefaultOptions } = require('../src/config');
+
+test('default options do not require a preset destination target', () => {
+    const defaults = getDefaultOptions();
+    assert.equal(defaults.target, null);
+});
 
 test('buildRuntimeOptions applies defaults, then config, then cli options', () => {
     const config = { minMediaMB: 50, oldDays: 30 };
