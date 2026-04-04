@@ -483,7 +483,7 @@ async function runReview(screen, version, categories, flags) {
     else if (key === 'd' || key === 'D') {
       sorted[cursorIdx].defaultAction = 'Delete';
     }
-    else if ((key === 'm' || key === 'M') && flags.destAvailable) {
+    else if ((key === 'm' || key === 'M') && flags.destAvailable && !sorted[cursorIdx].isDir) {
       sorted[cursorIdx].defaultAction = 'Move';
     }
     else if (key === '\r' || key === '\n') {

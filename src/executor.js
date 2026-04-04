@@ -9,24 +9,28 @@ function ensureDir(dirPath) {
   if (!fs.existsSync(dirPath)) fs.mkdirSync(dirPath, { recursive: true });
 }
 
-// Move a file to destRoot, preserving its relative path from the drive root.
+// Move a file or directory to destRoot, preserving its relative path from the drive root.
 // Falls back to copy+delete for cross-device moves (e.g. C: -> H:).
-function moveFile(src, destRoot) {
+function movePath(src, destRoot, isDir) {
   try {
     // Strip leading drive letter or slash to get a relative path
     const rel = src.replace(/^([A-Za-z]:[/\\]|\/+)/, '');
     const dest = path.join(destRoot, rel);
-    const destDir = path.dirname(dest);
-    ensureDir(destDir);
+    ensureDir(isDir ? dest : path.dirname(dest));
 
     try {
-      // Fast path: same device rename
+      // Fast path: same device rename (works for both files and directories)
       fs.renameSync(src, dest);
     } catch (renameErr) {
       if (renameErr.code === 'EXDEV') {
         // Cross-device: copy then delete
-        fs.copyFileSync(src, dest);
-        fs.unlinkSync(src);
+        if (isDir) {
+          fs.cpSync(src, dest, { recursive: true });
+          fs.rmSync(src, { recursive: true, force: true });
+        } else {
+          fs.copyFileSync(src, dest);
+          fs.unlinkSync(src);
+        }
       } else {
         throw renameErr;
       }
@@ -87,8 +91,10 @@ async function execute(items, action, isDir, opts = {}) {
       if (!destRoot) {
         result = { ok: false, reason: 'No destination drive set' };
       } else {
-        result = moveFile(item.path, destRoot);
+        result = movePath(item.path, destRoot, isDir);
       }
+    } else {
+      result = { ok: false, reason: 'Unknown action: ' + action };
     }
 
     if (result.ok) done++;
@@ -108,4 +114,4 @@ async function execute(items, action, isDir, opts = {}) {
   return { done, skipped };
 }
 
-module.exports = { execute, moveFile, deleteFile, deleteDir };
+module.exports = { execute, movePath, deleteFile, deleteDir };

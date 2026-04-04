@@ -5,7 +5,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 [![Node.js >=18](https://img.shields.io/badge/node-%3E%3D18-brightgreen)]()
 
-> Terminal UI for finding and eliminating disk bloat — like `npkill` but for everything.
+> Terminal UI for finding and eliminating disk bloat across your system.
 
 ## Features
 
