@@ -1,0 +1,50 @@
+{
+  "name": "disk-cleanup-tui",
+  "version": "1.0.0",
+  "description": "Interactive terminal UI to scan, clean, and offload junk files from your system",
+  "author": "chakrawarthy",
+  "license": "MIT",
+  "homepage": "https://github.com/yourusername/disk-cleanup-tui",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/yourusername/disk-cleanup-tui"
+  },
+  "keywords": [
+    "disk",
+    "cleanup",
+    "storage",
+    "node_modules",
+    "tui",
+    "cli",
+    "cache",
+    "temp",
+    "npkill",
+    "interactive"
+  ],
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "scripts": {
+    "dev": "node ./bin/cleanup.js --dry-run",
+    "start": "node ./bin/cleanup.js",
+    "test": "node --test"
+  },
+  "bin": {
+    "disk-cleanup": "./bin/cleanup.js"
+  },
+  "files": [
+    "bin/",
+    "src/",
+    "README.md"
+  ],
+  "main": "./src/index.js",
+  "dependencies": {
+    "chalk": "4.1.2",
+    "cli-progress": "3.12.0",
+    "cli-table3": "0.6.3",
+    "commander": "11.1.0",
+    "inquirer": "8.2.7",
+    "ora": "5.4.1",
+    "trash": "8.1.1"
+  }
+}
