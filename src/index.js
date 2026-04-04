@@ -76,13 +76,13 @@ async function resolveDestinationTarget(initialTarget) {
     name: 'driveRoot',
     message: 'Select destination drive:',
     choices: drives.map(root => ({
-      name: root + '  (will use ' + path.join(root, 'reap_archive') + ')',
+      name: root + '  (will use ' + path.join(root, 'vazr_archive') + ')',
       value: root,
     })),
   }]);
 
   return {
-    target: path.join(driveRoot, 'reap_archive'),
+    target: path.join(driveRoot, 'vazr_archive'),
     chosenMode: 'target',
   };
 }

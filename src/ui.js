@@ -90,8 +90,8 @@ function section(title) {
 function printHeader(version) {
   console.log('');
   const lines = [
-    t.primaryBold('reap') + t.muted('  ·  disk cleanup  ·  v' + version),
-    t.muted('Your disk\'s grim reaper  ·  Windows / macOS / Linux'),
+    t.primaryBold('vazr') + t.muted('  ·  disk cleanup  ·  v' + version),
+    t.muted('Your disk\'s cleaner  ·  Windows / macOS / Linux'),
     '',
     t.muted('Space') + t.dim(':toggle  ') +
     t.muted('↑↓') + t.dim(':navigate  ') +
