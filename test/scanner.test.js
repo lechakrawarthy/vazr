@@ -24,18 +24,17 @@ function writeFile(dir, name, content = 'x') {
 // ── scanLargeFiles ────────────────────────────────────────────
 // We test scanLargeFiles by temporarily overriding platform.getLargeScanRoots
 
-test('scanLargeFiles finds files above threshold', () => {
+test('scanLargeFiles finds files above threshold', async () => {
   const dir = tmpDir();
   const big = writeFile(dir, 'bigfile.bin', 'x'.repeat(600));
   writeFile(dir, 'tiny.txt', 'hi');
 
-  // Patch getLargeScanRoots to return our test dir
   const platform = require('../src/platform');
   const orig = platform.getLargeScanRoots;
   platform.getLargeScanRoots = () => [dir];
 
   const { scanLargeFiles } = require('../src/scanner');
-  const result = scanLargeFiles(500, [], undefined);
+  const result = await scanLargeFiles(500, [], undefined);
 
   platform.getLargeScanRoots = orig;
 
@@ -44,7 +43,7 @@ test('scanLargeFiles finds files above threshold', () => {
   assert.ok(result.totalSize >= 600);
 });
 
-test('scanLargeFiles skips paths in skipPaths', () => {
+test('scanLargeFiles skips paths in skipPaths', async () => {
   const dir = tmpDir();
   const big = writeFile(dir, 'skip-me.bin', 'x'.repeat(600));
 
@@ -53,7 +52,7 @@ test('scanLargeFiles skips paths in skipPaths', () => {
   platform.getLargeScanRoots = () => [dir];
 
   const { scanLargeFiles } = require('../src/scanner');
-  const result = scanLargeFiles(500, [big], undefined);
+  const result = await scanLargeFiles(500, [big], undefined);
 
   platform.getLargeScanRoots = orig;
 
@@ -62,7 +61,7 @@ test('scanLargeFiles skips paths in skipPaths', () => {
 
 // ── scanOldDownloads ──────────────────────────────────────────
 
-test('scanOldDownloads finds files older than cutoff', () => {
+test('scanOldDownloads finds files older than cutoff', async () => {
   const dir = tmpDir();
   const oldFile = writeFile(dir, 'old.zip', 'data');
 
@@ -75,14 +74,14 @@ test('scanOldDownloads finds files older than cutoff', () => {
   platform.getDownloadsPath = () => dir;
 
   const { scanOldDownloads } = require('../src/scanner');
-  const result = scanOldDownloads(60, undefined);
+  const result = await scanOldDownloads(60, undefined);
 
   platform.getDownloadsPath = orig;
 
   assert.ok(result.files.some(f => f.path === oldFile), 'old file should be found');
 });
 
-test('scanOldDownloads ignores recent files', () => {
+test('scanOldDownloads ignores recent files', async () => {
   const dir = tmpDir();
   writeFile(dir, 'fresh.zip', 'data');
 
@@ -91,20 +90,20 @@ test('scanOldDownloads ignores recent files', () => {
   platform.getDownloadsPath = () => dir;
 
   const { scanOldDownloads } = require('../src/scanner');
-  const result = scanOldDownloads(60, undefined);
+  const result = await scanOldDownloads(60, undefined);
 
   platform.getDownloadsPath = orig;
 
   assert.equal(result.files.length, 0, 'recent file should not appear');
 });
 
-test('scanOldDownloads returns empty when downloads dir missing', () => {
+test('scanOldDownloads returns empty when downloads dir missing', async () => {
   const platform = require('../src/platform');
   const orig = platform.getDownloadsPath;
   platform.getDownloadsPath = () => path.join(os.tmpdir(), 'no-such-downloads-' + Date.now());
 
   const { scanOldDownloads } = require('../src/scanner');
-  const result = scanOldDownloads(60, undefined);
+  const result = await scanOldDownloads(60, undefined);
 
   platform.getDownloadsPath = orig;
 
@@ -113,7 +112,7 @@ test('scanOldDownloads returns empty when downloads dir missing', () => {
 
 // ── scanLargeMedia ────────────────────────────────────────────
 
-test('scanLargeMedia finds large video files', () => {
+test('scanLargeMedia finds large video files', async () => {
   const dir = tmpDir();
   const bigMp4 = writeFile(dir, 'movie.mp4', 'x'.repeat(600));
   writeFile(dir, 'small.mp4', 'tiny');
@@ -123,7 +122,7 @@ test('scanLargeMedia finds large video files', () => {
   platform.getLargeScanRoots = () => [dir];
 
   const { scanLargeMedia } = require('../src/scanner');
-  const result = scanLargeMedia(500, undefined);
+  const result = await scanLargeMedia(500, undefined);
 
   platform.getLargeScanRoots = orig;
 
@@ -131,7 +130,7 @@ test('scanLargeMedia finds large video files', () => {
   assert.ok(!result.files.some(f => f.path.endsWith('small.mp4')));
 });
 
-test('scanLargeMedia ignores non-media files', () => {
+test('scanLargeMedia ignores non-media files', async () => {
   const dir = tmpDir();
   writeFile(dir, 'document.pdf', 'x'.repeat(600));
 
@@ -140,7 +139,7 @@ test('scanLargeMedia ignores non-media files', () => {
   platform.getLargeScanRoots = () => [dir];
 
   const { scanLargeMedia } = require('../src/scanner');
-  const result = scanLargeMedia(500, undefined);
+  const result = await scanLargeMedia(500, undefined);
 
   platform.getLargeScanRoots = orig;
 
@@ -149,7 +148,7 @@ test('scanLargeMedia ignores non-media files', () => {
 
 // ── scanDevArtifacts ──────────────────────────────────────────
 
-test('scanDevArtifacts finds node_modules directories', () => {
+test('scanDevArtifacts finds node_modules directories', async () => {
   const dir = tmpDir();
   const nm = path.join(dir, 'myproject', 'node_modules');
   fs.mkdirSync(nm, { recursive: true });
@@ -160,7 +159,7 @@ test('scanDevArtifacts finds node_modules directories', () => {
   platform.getScanRoots = () => [dir];
 
   const { scanDevArtifacts } = require('../src/scanner');
-  const result = scanDevArtifacts(undefined);
+  const result = await scanDevArtifacts(undefined);
 
   platform.getScanRoots = orig;
 
