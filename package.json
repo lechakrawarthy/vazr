@@ -1,6 +1,6 @@
 {
   "name": "@lechakrawarthy/vazr",
-  "version": "1.0.4",
+  "version": "1.1.0",
   "description": "Terminal UI for finding and eliminating disk bloat",
   "author": "lechakrawarthy",
   "license": "MIT",

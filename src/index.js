@@ -148,20 +148,20 @@ async function run(options = {}) {
     screen.tick();
   };
 
-  const tempResult = scanner.scanTempCache(onProgress);
+  const tempResult = await scanner.scanTempCache(onProgress);
   foundCount += tempResult.files.length;
 
-  const dlResult = scanner.scanOldDownloads(oldDays, onProgress);
+  const dlResult = await scanner.scanOldDownloads(oldDays, onProgress);
   foundCount += dlResult.files.length;
 
-  const mediaResult = scanner.scanLargeMedia(minMediaMB * 1024 * 1024, onProgress);
+  const mediaResult = await scanner.scanLargeMedia(minMediaMB * 1024 * 1024, onProgress);
   foundCount += mediaResult.files.length;
 
-  const devResult = scanner.scanDevArtifacts(onProgress);
+  const devResult = await scanner.scanDevArtifacts(onProgress);
   foundCount += devResult.folders ? devResult.folders.length : 0;
 
   const alreadyFound = mediaResult.files.map(f => f.path);
-  const largeResult = scanner.scanLargeFiles(minLargeMB * 1024 * 1024, alreadyFound, onProgress);
+  const largeResult = await scanner.scanLargeFiles(minLargeMB * 1024 * 1024, alreadyFound, onProgress);
   foundCount += largeResult.files.length;
 
   const scanDurationMs = Date.now() - scanStartTime;
