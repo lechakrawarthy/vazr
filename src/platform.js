@@ -7,7 +7,11 @@ const fs = require('fs');
 const HOME = os.homedir();
 const PLATFORM = process.platform; // 'win32' | 'darwin' | 'linux'
 
-// Default scan roots per OS
+/**
+ * Returns user project directories to scan for dev artifacts.
+ * Only returns paths that currently exist on disk.
+ * @returns {string[]}
+ */
 function getScanRoots() {
   if (PLATFORM === 'win32') {
     return [
@@ -40,7 +44,10 @@ function getScanRoots() {
   ].filter(p => fs.existsSync(p));
 }
 
-// Temp/cache paths per OS
+/**
+ * Returns OS temp/cache directories to scan. Only returns paths that exist.
+ * @returns {string[]}
+ */
 function getTempPaths() {
   if (PLATFORM === 'win32') {
     return [
@@ -71,7 +78,10 @@ function getTempPaths() {
   ].filter(p => fs.existsSync(p));
 }
 
-// Paths to exclude from deep scans
+/**
+ * Returns lowercase paths that should never be touched by any scan or operation.
+ * @returns {string[]}
+ */
 function getExcludedPaths() {
   if (PLATFORM === 'win32') {
     return [
@@ -95,12 +105,25 @@ function getExcludedPaths() {
   ].map(p => p.toLowerCase());
 }
 
+/**
+ * Returns true if targetPath is equal to or nested under basePath.
+ * Comparison is case-insensitive.
+ * @param {string} targetPath
+ * @param {string} basePath
+ * @returns {boolean}
+ */
 function isInsidePath(targetPath, basePath) {
   const target = path.resolve(targetPath).toLowerCase();
   const base = path.resolve(basePath).toLowerCase();
   return target === base || target.startsWith(base + path.sep);
 }
 
+/**
+ * Returns true if targetPath is a filesystem root or inside a protected system directory.
+ * Always call this before any delete/move operation.
+ * @param {string} targetPath
+ * @returns {boolean}
+ */
 function isProtectedPath(targetPath) {
   const resolved = path.resolve(targetPath);
   const root = path.parse(resolved).root;
@@ -108,6 +131,11 @@ function isProtectedPath(targetPath) {
   return getExcludedPaths().some(ex => isInsidePath(resolved, ex));
 }
 
+/**
+ * Returns scan roots for large-file/media scans — project dirs + Downloads,
+ * filtered to paths that exist and are not protected.
+ * @returns {string[]}
+ */
 function getLargeScanRoots() {
   const roots = [
     ...getScanRoots(),
@@ -119,13 +147,19 @@ function getLargeScanRoots() {
     .filter(p => !isProtectedPath(p));
 }
 
-// Root drive to scan
+/**
+ * Returns the system root drive (C:\ on Windows, / elsewhere).
+ * @returns {string}
+ */
 function getSystemRoot() {
   if (PLATFORM === 'win32') return 'C:\\';
   return '/';
 }
 
-// Downloads folder
+/**
+ * Returns the cross-platform Downloads folder path.
+ * @returns {string}
+ */
 function getDownloadsPath() {
   return path.join(HOME, 'Downloads');
 }
