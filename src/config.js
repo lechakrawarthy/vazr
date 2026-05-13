@@ -22,6 +22,44 @@ function getDefaultOptions() {
     };
 }
 
+const KNOWN_KEYS = new Set([
+    'dryRun', 'target', 'minMediaMB', 'minLargeMB', 'oldDays', 'forceDelete', 'logFile',
+]);
+
+function validateConfig(cfg, configPath) {
+    const label = configPath ? `(${configPath})` : '';
+
+    for (const key of Object.keys(cfg)) {
+        if (!KNOWN_KEYS.has(key)) {
+            console.warn(`[vazr] Warning: Unknown config key "${key}" ${label} — ignored.`);
+        }
+    }
+
+    const posInts = ['minMediaMB', 'minLargeMB', 'oldDays'];
+    for (const key of posInts) {
+        if (cfg[key] !== undefined) {
+            const v = cfg[key];
+            if (typeof v !== 'number' || !Number.isInteger(v) || v <= 0) {
+                throw new Error(`Config "${key}" must be a positive integer. Got: ${JSON.stringify(v)} ${label}`);
+            }
+        }
+    }
+
+    const bools = ['dryRun', 'forceDelete'];
+    for (const key of bools) {
+        if (cfg[key] !== undefined && typeof cfg[key] !== 'boolean') {
+            throw new Error(`Config "${key}" must be a boolean. Got: ${JSON.stringify(cfg[key])} ${label}`);
+        }
+    }
+
+    const strings = ['target', 'logFile'];
+    for (const key of strings) {
+        if (cfg[key] !== undefined && cfg[key] !== null && typeof cfg[key] !== 'string') {
+            throw new Error(`Config "${key}" must be a string. Got: ${JSON.stringify(cfg[key])} ${label}`);
+        }
+    }
+}
+
 function findConfigPath(customPath) {
     if (customPath) return customPath;
     if (process.env.VAZR_CONFIG) return process.env.VAZR_CONFIG;
@@ -59,6 +97,8 @@ function loadConfig(customPath) {
     if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
         throw new Error('Config root must be a JSON object: ' + configPath);
     }
+
+    validateConfig(parsed, configPath);
 
     return { config: parsed, configPath };
 }

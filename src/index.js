@@ -8,7 +8,7 @@ const scanner = require('./scanner');
 const executor = require('./executor');
 const { createLogger } = require('./logger');
 const {
-  Screen, ESC, tok, fmtBytes, fmtN,
+  Screen, ESC, tok,
   enableRaw, disableRaw, nextKey,
   runReview, confirmForceDelete,
 } = require('./tui');
@@ -119,16 +119,26 @@ async function run(options = {}) {
 
   const screen = new Screen();
 
-  // Graceful cleanup on forced exit
+  // Graceful cleanup on forced exit — restores terminal state regardless of which
+  // phase is active (scan, review, execute). Safe to call multiple times.
+  let cleanupDone = false;
   const exitCleanup = () => {
+    if (cleanupDone) return;
+    cleanupDone = true;
+    try { disableRaw(); } catch { /* ignore if not in raw mode */ }
     process.stdout.write(ESC.altOff + ESC.showCursor + '\n');
   };
   process.on('exit', exitCleanup);
-  process.on('SIGINT', () => { exitCleanup(); process.exit(0); });
+  process.on('SIGINT', () => {
+    exitCleanup();
+    logger.info('cleanup_cancelled_sigint');
+    process.exit(0);
+  });
 
   // ── SCAN ──────────────────────────────────────────────────────
   process.stdout.write(ESC.altOn + ESC.hideCursor);
 
+  const scanStartTime = Date.now();
   let scanText = 'Starting scan...';
   let foundCount = 0;
 
@@ -138,21 +148,23 @@ async function run(options = {}) {
     screen.tick();
   };
 
-  const tempResult = scanner.scanTempCache(onProgress);
+  const tempResult = await scanner.scanTempCache(onProgress);
   foundCount += tempResult.files.length;
 
-  const dlResult = scanner.scanOldDownloads(oldDays, onProgress);
+  const dlResult = await scanner.scanOldDownloads(oldDays, onProgress);
   foundCount += dlResult.files.length;
 
-  const mediaResult = scanner.scanLargeMedia(minMediaMB * 1024 * 1024, onProgress);
+  const mediaResult = await scanner.scanLargeMedia(minMediaMB * 1024 * 1024, onProgress);
   foundCount += mediaResult.files.length;
 
-  const devResult = scanner.scanDevArtifacts(onProgress);
+  const devResult = await scanner.scanDevArtifacts(onProgress);
   foundCount += devResult.folders ? devResult.folders.length : 0;
 
   const alreadyFound = mediaResult.files.map(f => f.path);
-  const largeResult = scanner.scanLargeFiles(minLargeMB * 1024 * 1024, alreadyFound, onProgress);
+  const largeResult = await scanner.scanLargeFiles(minLargeMB * 1024 * 1024, alreadyFound, onProgress);
   foundCount += largeResult.files.length;
+
+  const scanDurationMs = Date.now() - scanStartTime;
 
   logger.info('scan_complete', {
     temp: tempResult.files.length,
@@ -310,7 +322,7 @@ async function run(options = {}) {
   // ── DONE ──────────────────────────────────────────────────────
   screen.renderDone(
     version,
-    { done: totalDone, skipped: totalSkipped, moved: totalMoved },
+    { done: totalDone, skipped: totalSkipped, moved: totalMoved, scanned: foundCount, scanDurationMs },
     destRoot,
     dryRun
   );

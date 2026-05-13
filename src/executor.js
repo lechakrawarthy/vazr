@@ -9,8 +9,14 @@ function ensureDir(dirPath) {
   if (!fs.existsSync(dirPath)) fs.mkdirSync(dirPath, { recursive: true });
 }
 
-// Move a file or directory to destRoot, preserving its relative path from the drive root.
-// Falls back to copy+delete for cross-device moves (e.g. C: -> H:).
+/**
+ * Move a file or directory to destRoot, preserving its relative path from the drive root.
+ * Falls back to copy+delete for cross-device moves (e.g. C: → H:).
+ * @param {string} src - Source path
+ * @param {string} destRoot - Destination root directory
+ * @param {boolean} isDir - Whether src is a directory
+ * @returns {{ ok: boolean, reason?: string }}
+ */
 function movePath(src, destRoot, isDir) {
   try {
     // Strip leading drive letter or slash to get a relative path
@@ -41,6 +47,11 @@ function movePath(src, destRoot, isDir) {
   }
 }
 
+/**
+ * Permanently delete a single file.
+ * @param {string} filePath
+ * @returns {{ ok: boolean, reason?: string }}
+ */
 function deleteFile(filePath) {
   try {
     fs.unlinkSync(filePath);
@@ -50,6 +61,11 @@ function deleteFile(filePath) {
   }
 }
 
+/**
+ * Permanently delete a directory and all its contents.
+ * @param {string} dirPath
+ * @returns {{ ok: boolean, reason?: string }}
+ */
 function deleteDir(dirPath) {
   try {
     fs.rmSync(dirPath, { recursive: true, force: true });
@@ -59,6 +75,11 @@ function deleteDir(dirPath) {
   }
 }
 
+/**
+ * Move a path to the OS trash/recycle bin (safe delete).
+ * @param {string} targetPath
+ * @returns {Promise<{ ok: boolean, reason?: string }>}
+ */
 async function trashPath(targetPath) {
   try {
     await trash([targetPath]);
@@ -68,11 +89,14 @@ async function trashPath(targetPath) {
   }
 }
 
-// Run all operations with per-item callbacks.
-// items: Array<{ path, size }>
-// action: 'delete' | 'move'
-// isDir: boolean
-// opts: { destRoot, dryRun, forceDelete, logger, onItem(result) }
+/**
+ * Execute a batch of file operations with per-item progress callbacks.
+ * @param {Array<{path: string, size: number}>} items
+ * @param {'delete' | 'move'} action
+ * @param {boolean} isDir - Whether items are directories
+ * @param {{ destRoot?: string, dryRun?: boolean, forceDelete?: boolean, logger?: object, onItem?: (r: object) => void }} opts
+ * @returns {Promise<{ done: number, skipped: number }>}
+ */
 async function execute(items, action, isDir, opts = {}) {
   const { destRoot, dryRun = false, forceDelete = false, logger, onItem } = opts;
   let done = 0; let skipped = 0;
