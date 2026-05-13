@@ -1,8 +1,13 @@
 'use strict';
 
 const fs = require('fs');
+const fsp = require('fs').promises;
 const path = require('path');
 const platform = require('./platform');
+
+function debugLog(msg) {
+  if (process.env.DEBUG) console.error('[scanner] ' + msg);
+}
 
 const ARTIFACT_NAMES = new Set([
   'node_modules', '.cache', 'dist', 'build', '.next', '.nuxt',
@@ -16,33 +21,80 @@ const MEDIA_EXTENSIONS = new Set([
   '.vob', '.ts', '.m2ts',
 ]);
 
-// ── Core walker ─────────────────────────────────────────────
-// Walks a directory up to maxDepth, calling onFile(fullPath, stat)
-// and onDir(fullPath) as it goes. Returns quickly on permission errors.
-function walk(dir, maxDepth, onFile, onDir, depth = 0) {
-  if (depth > maxDepth) return;
-  let entries;
-  try { entries = fs.readdirSync(dir, { withFileTypes: true }); }
-  catch { return; }
+// ── Concurrency limiter ──────────────────────────────────────
+// Keeps at most `limit` async tasks running simultaneously.
+function makeLimiter(limit) {
+  let active = 0;
+  const queue = [];
+  function run() {
+    while (active < limit && queue.length > 0) {
+      active++;
+      const { fn, resolve, reject } = queue.shift();
+      fn().then(v => { active--; resolve(v); run(); }, e => { active--; reject(e); run(); });
+    }
+  }
+  return fn => new Promise((resolve, reject) => { queue.push({ fn, resolve, reject }); run(); });
+}
 
+const schedule = makeLimiter(16);
+
+// ── Core async walker ────────────────────────────────────────
+
+/**
+ * Recursively walk a directory up to maxDepth asynchronously.
+ * Skips symlinks and silently continues past permission errors.
+ * @param {string} dir - Directory to walk
+ * @param {number} maxDepth - Maximum recursion depth
+ * @param {(fullPath: string, stat: import('fs').Stats) => void} onFile - Called for each file
+ * @param {((fullPath: string, name: string) => void) | null} onDir - Called before descending
+ * @param {number} [depth=0] - Current depth (internal)
+ * @returns {Promise<void>}
+ */
+async function walk(dir, maxDepth, onFile, onDir, depth = 0) {
+  if (depth > maxDepth) return;
+
+  let entries;
+  try {
+    entries = await schedule(() => fsp.readdir(dir, { withFileTypes: true }));
+  } catch {
+    return;
+  }
+
+  const subtasks = [];
   for (const entry of entries) {
     const full = path.join(dir, entry.name);
     try {
       if (entry.isSymbolicLink()) continue;
       if (entry.isDirectory()) {
         if (onDir) onDir(full, entry.name);
-        walk(full, maxDepth, onFile, onDir, depth + 1);
+        subtasks.push(walk(full, maxDepth, onFile, onDir, depth + 1));
       } else if (entry.isFile()) {
-        const stat = fs.statSync(full);
-        onFile(full, stat);
+        subtasks.push(
+          schedule(() => fsp.stat(full)).then(stat => onFile(full, stat)).catch(err => {
+            if (err.code !== 'EACCES' && err.code !== 'EPERM') {
+              debugLog(`unexpected stat error at ${full}: ${err.code} ${err.message}`);
+            }
+          })
+        );
       }
-    } catch { /* locked / no permission */ }
+    } catch (err) {
+      if (err.code !== 'EACCES' && err.code !== 'EPERM') {
+        debugLog(`unexpected error at ${full}: ${err.code} ${err.message}`);
+      }
+    }
   }
+
+  await Promise.all(subtasks);
 }
 
-function getDirSize(dir) {
+/**
+ * Returns the total byte size of all files under a directory (recursive, async).
+ * @param {string} dir
+ * @returns {Promise<number>}
+ */
+async function getDirSize(dir) {
   let total = 0;
-  walk(dir, 99, (f, stat) => { total += stat.size; }, null);
+  await walk(dir, 99, (_f, stat) => { total += stat.size; }, null);
   return total;
 }
 
@@ -53,14 +105,19 @@ function isExcluded(filePath) {
 
 // ── Scanners ─────────────────────────────────────────────────
 
-function scanTempCache(onProgress) {
+/**
+ * Scan OS temp/cache directories.
+ * @param {((msg: string) => void) | undefined} onProgress
+ * @returns {Promise<{ files: Array<{path: string, size: number}>, totalSize: number }>}
+ */
+async function scanTempCache(onProgress) {
   const tempPaths = platform.getTempPaths();
   const files = [];
   let totalSize = 0;
 
   for (const p of tempPaths) {
     if (onProgress) onProgress(`Scanning temp: ${p}`);
-    walk(p, 10,
+    await walk(p, 10,
       (f, stat) => { files.push({ path: f, size: stat.size }); totalSize += stat.size; },
       null
     );
@@ -68,7 +125,13 @@ function scanTempCache(onProgress) {
   return { files, totalSize };
 }
 
-function scanOldDownloads(days, onProgress) {
+/**
+ * Scan Downloads folder for files not modified within the last `days` days.
+ * @param {number} days
+ * @param {((msg: string) => void) | undefined} onProgress
+ * @returns {Promise<{ files: Array<{path: string, size: number}>, totalSize: number }>}
+ */
+async function scanOldDownloads(days, onProgress) {
   const downloadsPath = platform.getDownloadsPath();
   if (!fs.existsSync(downloadsPath)) return { files: [], totalSize: 0 };
 
@@ -77,7 +140,7 @@ function scanOldDownloads(days, onProgress) {
   let totalSize = 0;
 
   if (onProgress) onProgress('Scanning Downloads folder...');
-  walk(downloadsPath, 4,
+  await walk(downloadsPath, 4,
     (f, stat) => {
       if (stat.mtimeMs < cutoff) {
         files.push({ path: f, size: stat.size });
@@ -89,13 +152,19 @@ function scanOldDownloads(days, onProgress) {
   return { files, totalSize };
 }
 
-function scanLargeMedia(minBytes, onProgress) {
+/**
+ * Scan for media files (video/image) at or above `minBytes`.
+ * @param {number} minBytes - Minimum size in bytes
+ * @param {((msg: string) => void) | undefined} onProgress
+ * @returns {Promise<{ files: Array<{path: string, size: number}>, totalSize: number }>}
+ */
+async function scanLargeMedia(minBytes, onProgress) {
   const files = [];
   let totalSize = 0;
   const roots = platform.getLargeScanRoots();
 
   for (const root of roots) {
-    walk(root, 6,
+    await walk(root, 6,
       (f, stat) => {
         if (isExcluded(f)) return;
         if (stat.size >= minBytes && MEDIA_EXTENSIONS.has(path.extname(f).toLowerCase())) {
@@ -110,46 +179,69 @@ function scanLargeMedia(minBytes, onProgress) {
   return { files, totalSize };
 }
 
-function scanDevArtifacts(onProgress) {
+/**
+ * Scan project directories for common build/dependency artifact folders
+ * (node_modules, dist, .cache, __pycache__, etc.).
+ * @param {((msg: string) => void) | undefined} onProgress
+ * @returns {Promise<{ folders: Array<{path: string, size: number, name: string}>, totalSize: number }>}
+ */
+async function scanDevArtifacts(onProgress) {
   const searchRoots = platform.getScanRoots();
   const folders = [];
   let totalSize = 0;
 
-  function walkForArtifacts(dir, depth = 0) {
+  async function walkForArtifacts(dir, depth = 0) {
     if (depth > 6) return;
     let entries;
-    try { entries = fs.readdirSync(dir, { withFileTypes: true }); }
-    catch { return; }
+    try {
+      entries = await schedule(() => fsp.readdir(dir, { withFileTypes: true }));
+    } catch { return; }
 
+    const subtasks = [];
     for (const entry of entries) {
-      if (!entry.isDirectory()) continue;
+      if (!entry.isDirectory() || entry.isSymbolicLink()) continue;
       const full = path.join(dir, entry.name);
       try {
-        if (entry.isSymbolicLink()) continue;
         if (ARTIFACT_NAMES.has(entry.name)) {
-          const size = getDirSize(full);
-          folders.push({ path: full, size, name: entry.name });
-          totalSize += size;
-          if (onProgress) onProgress(`Scanning dev artifacts... ${folders.length} folders`);
+          subtasks.push(
+            getDirSize(full).then(size => {
+              folders.push({ path: full, size, name: entry.name });
+              totalSize += size;
+              if (onProgress) onProgress(`Scanning dev artifacts... ${folders.length} folders`);
+            })
+          );
         } else {
-          walkForArtifacts(full, depth + 1);
+          subtasks.push(walkForArtifacts(full, depth + 1));
         }
-      } catch { /* skip */ }
+      } catch (err) {
+        if (err.code !== 'EACCES' && err.code !== 'EPERM') {
+          debugLog(`unexpected error at ${full}: ${err.code} ${err.message}`);
+        }
+      }
     }
+    await Promise.all(subtasks);
   }
 
-  for (const root of searchRoots) walkForArtifacts(root);
+  await Promise.all(searchRoots.map(root => walkForArtifacts(root)));
   return { folders, totalSize };
 }
 
-function scanLargeFiles(minBytes, skipPaths, onProgress) {
+/**
+ * Catch-all scan for files at or above `minBytes`, excluding paths already found
+ * by other scanners.
+ * @param {number} minBytes - Minimum size in bytes
+ * @param {string[]} skipPaths - File paths to exclude (already captured by another scanner)
+ * @param {((msg: string) => void) | undefined} onProgress
+ * @returns {Promise<{ files: Array<{path: string, size: number}>, totalSize: number }>}
+ */
+async function scanLargeFiles(minBytes, skipPaths, onProgress) {
   const skipSet = new Set(skipPaths);
   const files = [];
   let totalSize = 0;
   const roots = platform.getLargeScanRoots();
 
   for (const root of roots) {
-    walk(root, 6,
+    await walk(root, 6,
       (f, stat) => {
         if (isExcluded(f)) return;
         if (stat.size >= minBytes && !skipSet.has(f)) {
