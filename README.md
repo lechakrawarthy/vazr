@@ -22,6 +22,12 @@ vazr is built for the awkward middle ground between “I need to clean this up n
 3. Move files to a target drive or send them to Trash/Recycle Bin.
 4. Use `--dry-run` first if you want a zero-risk preview.
 
+## TUI Preview
+
+This is the actual terminal UI that vazr shows during review.
+
+![vazr terminal UI preview](vazr_preview.jpeg)
+
 ## Features
 
 - Interactive checkbox UI — pick exactly what to clean
