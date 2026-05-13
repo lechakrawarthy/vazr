@@ -9,7 +9,18 @@
 
 > Terminal UI for finding and eliminating disk bloat across your system.
 
-**Quick Links:** [Features](#features) • [Quick Start](#quick-start) • [Installation](#install-globally) • [Contributing](CONTRIBUTING.md) • [Development](DEVELOPMENT.md) • [Issues](https://github.com/lechakrawarthy/vazr/issues)
+**Quick Links:** [Features](#features) • [Quick Start](#quick-start-no-install) • [Installation](#install-globally) • [Contributing](CONTRIBUTING.md) • [Development](DEVELOPMENT.md) • [Issues](https://github.com/lechakrawarthy/vazr/issues)
+
+## Why vazr
+
+vazr is built for the awkward middle ground between “I need to clean this up now” and “I don't want to accidentally delete the wrong thing.” It gives you a fast scan, a visual review step, and safe defaults so you can clean up space with confidence.
+
+## How it works
+
+1. Scan for common disk bloat categories.
+2. Review the results in an interactive terminal UI.
+3. Move files to a target drive or send them to Trash/Recycle Bin.
+4. Use `--dry-run` first if you want a zero-risk preview.
 
 ## Features
 
@@ -24,6 +35,15 @@
 - Live spinner during scan so you always know it's working
 - Dashboard-style summary with category share and largest-file preview
 
+## Common workflows
+
+| Goal | Command |
+|---|---|
+| Safe preview | `vazr --dry-run` |
+| Interactive cleanup | `vazr` |
+| Move files to another drive | `vazr --target "D:\Archive"` |
+| Clean up with custom thresholds | `vazr --min-media 50 --old-days 14` |
+
 ## Quick Start (no install)
 
 ```bash
@@ -37,7 +57,7 @@ npm install -g @lechakrawarthy/vazr
 vazr
 ```
 
-## Usage
+## CLI Reference
 
 ```
 Usage: vazr [options]
@@ -132,6 +152,13 @@ By default logs are written to:
 
 Override with `--log-file`.
 
+## Troubleshooting
+
+- **No files found** — Try lowering `--min-media`, `--min-large`, or `--old-days`.
+- **Target drive unavailable** — Choose a different destination or run delete-only mode.
+- **Permission errors** — Re-run the CLI from a shell with access to the files you want to review.
+- **Windows path issues** — Wrap paths in quotes, for example `--target "D:\Archive"`.
+
 ## Contributing
 
 vazr welcomes contributions! Whether you're reporting bugs, suggesting features, or writing code:
@@ -143,7 +170,7 @@ vazr welcomes contributions! Whether you're reporting bugs, suggesting features,
 
 ### Getting Started
 
-- **New to contributing?** Look for issues labeled [**good first issue**](https://github.com/lechakrawarthy/vazr/issues?q=label%3A%22good%first+issue%22)
+- **New to contributing?** Look for issues labeled [**good first issue**](https://github.com/lechakrawarthy/vazr/issues?q=label%3A%22good%20first%20issue%22)
 - **Want to understand the code?** Read [DEVELOPMENT.md](DEVELOPMENT.md) and [ARCHITECTURE.md](ARCHITECTURE.md)
 - **Have questions?** Open a [GitHub Discussion](https://github.com/lechakrawarthy/vazr/discussions)
 
