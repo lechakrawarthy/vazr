@@ -2,10 +2,14 @@
 
 [![npm version](https://img.shields.io/npm/v/@lechakrawarthy/vazr.svg)](https://www.npmjs.com/package/@lechakrawarthy/vazr)
 [![npm downloads](https://img.shields.io/npm/dm/@lechakrawarthy/vazr.svg)](https://www.npmjs.com/package/@lechakrawarthy/vazr)
+[![CI](https://github.com/lechakrawarthy/vazr/actions/workflows/ci.yml/badge.svg)](https://github.com/lechakrawarthy/vazr/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 [![Node.js >=18](https://img.shields.io/badge/node-%3E%3D18-brightgreen)]()
+[![Code of Conduct](https://img.shields.io/badge/Code%20of%20Conduct-Contributor%20Covenant-ff69b4.svg)](CODE_OF_CONDUCT.md)
 
 > Terminal UI for finding and eliminating disk bloat across your system.
+
+**Quick Links:** [Features](#features) • [Quick Start](#quick-start) • [Installation](#install-globally) • [Contributing](CONTRIBUTING.md) • [Development](DEVELOPMENT.md) • [Issues](https://github.com/lechakrawarthy/vazr/issues)
 
 ## Features
 
@@ -127,6 +131,27 @@ By default logs are written to:
 - `~/.vazr/logs/cleanup.log`
 
 Override with `--log-file`.
+
+## Contributing
+
+vazr welcomes contributions! Whether you're reporting bugs, suggesting features, or writing code:
+
+1. **Report Issues** — Found a bug? [Open an issue](https://github.com/lechakrawarthy/vazr/issues)
+2. **Suggest Features** — Have an idea? [Start a discussion or issue](https://github.com/lechakrawarthy/vazr/issues)
+3. **Submit Code** — Want to help? See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines
+4. **Improve Docs** — Docs are always welcome!
+
+### Getting Started
+
+- **New to contributing?** Look for issues labeled [**good first issue**](https://github.com/lechakrawarthy/vazr/issues?q=label%3A%22good%first+issue%22)
+- **Want to understand the code?** Read [DEVELOPMENT.md](DEVELOPMENT.md) and [ARCHITECTURE.md](ARCHITECTURE.md)
+- **Have questions?** Open a [GitHub Discussion](https://github.com/lechakrawarthy/vazr/discussions)
+
+## Community
+
+- **Code of Conduct** — See [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md)
+- **Security Issues** — Please report via [SECURITY.md](SECURITY.md) (do not open public issues)
+- **Changelog** — Check [CHANGELOG.md](CHANGELOG.md) for release notes
 
 ## License
 
