@@ -1,6 +1,7 @@
 # Development only
 .github/
 test/
+tests/
 coverage/
 *.test.js
 *.spec.js
@@ -13,5 +14,8 @@ design.html
 serve-design.js
 
 # Local config
+.cloud/
+*.log
+.env*
 .env
 .DS_Store
