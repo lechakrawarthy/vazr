@@ -29,7 +29,7 @@
   },
   "scripts": {
     "start": "node ./bin/vazr.js",
-    "test": "node --test test/*.test.js"
+    "test": "node --test test/config.test.js test/validators.test.js test/scanner.test.js test/executor.test.js test/platform.test.js"
   },
   "bin": {
     "vazr": "bin/vazr.js"
