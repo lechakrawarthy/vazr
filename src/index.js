@@ -7,6 +7,7 @@ const inquirer = require('inquirer');
 const scanner = require('./scanner');
 const executor = require('./executor');
 const { createLogger } = require('./logger');
+const { exportResults } = require('./exporter');
 const {
   Screen, ESC, tok,
   enableRaw, disableRaw, nextKey,
@@ -98,6 +99,10 @@ async function run(options = {}) {
     logFile = null,
     configPath = null,
     version = '1.0.0',
+    exportFormat = null,
+    exportOutput = null,
+    sortBy = 'size',
+    scanCategories = null, // null = all; array of keys to include
   } = options;
 
   const logger = createLogger(logFile);
@@ -232,18 +237,57 @@ async function run(options = {}) {
     logger.warn('destination_unavailable', { target: destRoot });
   }
 
+  // ── Apply scanCategories filter (profile / CLI) ───────────────
+  const visibleCategories = scanCategories
+    ? categories.filter(c => scanCategories.includes(c.key))
+    : categories;
+
+  // ── Export mode (--export): skip TUI entirely ─────────────────
+  if (exportFormat) {
+    process.stdout.write(ESC.altOff + ESC.showCursor);
+    exportResults(visibleCategories, {
+      version,
+      dryRun,
+      scanDurationMs,
+      minMediaMB,
+      minLargeMB,
+      oldDays,
+    }, { format: exportFormat, outputPath: exportOutput || null });
+    return;
+  }
+
   // All empty?
-  if (categories.every(c => c.count === 0)) {
+  if (visibleCategories.every(c => c.count === 0)) {
     process.stdout.write(ESC.altOff + ESC.showCursor);
     console.log('\n  ' + chalk.green('Your drive looks clean already! Nothing to do.\n'));
     return;
   }
 
-  // ── REVIEW ────────────────────────────────────────────────────
-  // runReview handles its own alt-screen + raw mode lifecycle
+  // ── Category summary before TUI ───────────────────────────────
   process.stdout.write(ESC.altOff + ESC.showCursor);
 
-  const reviewResult = await runReview(screen, version, categories, flags);
+  const { fmtBytes } = require('./tui/tokens');
+  console.log('\n  ' + chalk.green.bold('Scan complete') + '  ' + chalk.dim('(' + (scanDurationMs / 1000).toFixed(1) + 's)'));
+  console.log('  ' + chalk.dim('─'.repeat(54)));
+
+  const totalSummarySize = visibleCategories.reduce((s, c) => s + c.size, 0);
+  for (const cat of visibleCategories) {
+    if (cat.count === 0) continue;
+    const pct = totalSummarySize > 0 ? Math.round((cat.size / totalSummarySize) * 100) : 0;
+    console.log(
+      '  ' + chalk.cyan(cat.label.padEnd(35)) +
+      chalk.yellow(fmtBytes(cat.size).padStart(10)) +
+      chalk.dim('  ' + pct + '%')
+    );
+  }
+  console.log('  ' + chalk.dim('─'.repeat(54)));
+  console.log('  ' + chalk.dim('Total') + '  ' + chalk.green.bold(fmtBytes(totalSummarySize).padStart(37)));
+  console.log();
+
+  // ── REVIEW ────────────────────────────────────────────────────
+  // runReview handles its own alt-screen + raw mode lifecycle
+
+  const reviewResult = await runReview(screen, version, visibleCategories, { ...flags, sortBy });
 
   if (!reviewResult) {
     console.log('\n  ' + tok.muted('Cancelled. Nothing was changed.\n'));
@@ -255,7 +299,7 @@ async function run(options = {}) {
   const plan = selectedKeys
     .filter(k => actionMap[k])
     .map(k => {
-      const cat = categories.find(c => c.key === k);
+      const cat = visibleCategories.find(c => c.key === k);
       return { key: k, label: cat.label, size: cat.size, action: actionMap[k] };
     });
 
@@ -281,7 +325,7 @@ async function run(options = {}) {
   let totalDone = 0, totalSkipped = 0, totalMoved = 0;
 
   for (const planItem of plan) {
-    const cat = categories.find(c => c.key === planItem.key);
+    const cat = visibleCategories.find(c => c.key === planItem.key);
     const action = planItem.action;
     const items = cat.items;
     if (items.length === 0) continue;
