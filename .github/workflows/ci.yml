@@ -8,7 +8,9 @@ on:
 
 jobs:
   test:
+    name: test (${{ matrix.os }})
     strategy:
+      fail-fast: false
       matrix:
         os: [ubuntu-latest, windows-latest]
     runs-on: ${{ matrix.os }}
@@ -31,5 +33,11 @@ jobs:
       - name: CLI smoke test
         run: node ./bin/vazr.js --help
 
-      - name: Security audit (prod)
-        run: npm audit --omit=dev --audit-level=low
+      - name: CLI version smoke test
+        run: node ./bin/vazr.js --version
+
+      - name: CLI profile list smoke test
+        run: node ./bin/vazr.js profile list
+
+      - name: Security audit (prod deps only)
+        run: npm audit --omit=dev --audit-level=high
