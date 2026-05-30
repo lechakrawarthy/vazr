@@ -142,7 +142,14 @@ async function scanOldDownloads(days, onProgress) {
   if (onProgress) onProgress('Scanning Downloads folder...');
   await walk(downloadsPath, 4,
     (f, stat) => {
-      if (stat.mtimeMs < cutoff) {
+      // Use the most recent of mtime and atime to reduce false positives.
+      // birthtime is excluded — it is unreliable on Linux and often equals mtime.
+      // A file touched recently by any means should not be flagged as old.
+      const lastActivity = Math.max(
+        stat.mtimeMs || 0,
+        stat.atimeMs || 0,
+      );
+      if (lastActivity < cutoff) {
         files.push({ path: f, size: stat.size });
         totalSize += stat.size;
       }
