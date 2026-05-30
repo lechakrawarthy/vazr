@@ -233,9 +233,10 @@ class Screen {
 
     this.blank(Math.max(0, this.H - this._buf.length - 2));
 
+    const sortLabel = 'sort:' + (flags.currentSort || 'size');
     const binds = [
       ['↑↓', 'nav'], ['Space', 'tog'], ['D', 'del'],
-      ['M', 'mov'], ['Enter', 'run'], ['Q', 'quit'],
+      ['M', 'mov'], ['S', sortLabel], ['Enter', 'run'], ['Q', 'quit'],
     ];
     let bstrs = [];
     let curLen = 0;

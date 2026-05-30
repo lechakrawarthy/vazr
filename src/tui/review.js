@@ -13,11 +13,22 @@ const { enableRaw, disableRaw, nextKey } = require('./input');
  * @param {{ dryRun: boolean, forceDelete: boolean, destAvailable: boolean }} flags
  * @returns {Promise<{ selectedKeys: string[], actionMap: object } | null>}
  */
+function sortCategories(categories, sortBy) {
+  const arr = [...categories];
+  if (sortBy === 'name') return arr.sort((a, b) => a.label.localeCompare(b.label));
+  if (sortBy === 'count') return arr.sort((a, b) => b.count - a.count);
+  // default: size descending
+  return arr.sort((a, b) => b.size - a.size);
+}
+
 async function runReview(screen, version, categories, flags) {
   const visible = categories.filter(c => c.count > 0);
   if (visible.length === 0) return null;
 
-  const sorted = [...visible].sort((a, b) => b.size - a.size);
+  const sorted = sortCategories(visible, flags.sortBy || 'size');
+  // Track current sort state so user can toggle (S key cycles through modes)
+  let currentSort = flags.sortBy || 'size';
+  const SORT_MODES = ['size', 'name', 'count'];
 
   let cursorIdx = 0;
   const checked = new Set(
@@ -28,7 +39,7 @@ async function runReview(screen, version, categories, flags) {
   enableRaw();
 
   const render = () => {
-    screen.renderReview(version, sorted, cursorIdx, checked, flags);
+    screen.renderReview(version, sorted, cursorIdx, checked, { ...flags, currentSort });
     screen.flush();
   };
 
@@ -55,6 +66,15 @@ async function runReview(screen, version, categories, flags) {
     }
     else if ((key === 'm' || key === 'M') && flags.destAvailable && !sorted[cursorIdx].isDir) {
       sorted[cursorIdx].defaultAction = 'Move';
+    }
+    else if (key === 's' || key === 'S') {
+      const nextIdx = (SORT_MODES.indexOf(currentSort) + 1) % SORT_MODES.length;
+      currentSort = SORT_MODES[nextIdx];
+      const focusKey = sorted[cursorIdx] ? sorted[cursorIdx].key : null;
+      const resorted = sortCategories(visible, currentSort);
+      sorted.length = 0;
+      sorted.push(...resorted);
+      cursorIdx = focusKey ? Math.max(0, sorted.findIndex(c => c.key === focusKey)) : 0;
     }
     else if (key === '\r' || key === '\n') {
       if (checked.size === 0) continue;

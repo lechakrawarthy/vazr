@@ -1,6 +1,6 @@
 {
   "name": "@lechakrawarthy/vazr",
-  "version": "1.1.0",
+  "version": "1.3.0",
   "description": "Terminal UI for finding and eliminating disk bloat",
   "author": "lechakrawarthy",
   "license": "MIT",
@@ -22,7 +22,12 @@
     "cache",
     "temp",
     "npkill",
-    "interactive"
+    "interactive",
+    "disk-usage",
+    "file-cleanup",
+    "developer-tools",
+    "workspace-cleaner",
+    "profiles"
   ],
   "engines": {
     "node": ">=18.0.0"
