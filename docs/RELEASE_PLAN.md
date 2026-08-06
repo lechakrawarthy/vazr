@@ -2,6 +2,15 @@
 
 This is the exact plan to publish without local npm login.
 
+## Do This Now (6 Steps)
+
+1. Create an npm Automation token from npmjs.com.
+2. Add it as GitHub repo secret named `NPM_TOKEN`.
+3. Merge your release branch to `main`.
+4. Confirm `package.json` version is the one you want to publish.
+5. Push matching tag (`vX.Y.Z`) to trigger publish.
+6. Verify publish with `npm view @lechakrawarthy/vazr version`.
+
 ## Goal
 
 Publish `@lechakrawarthy/vazr` from GitHub Actions using `NPM_TOKEN`.
