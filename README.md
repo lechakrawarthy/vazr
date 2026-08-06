@@ -85,6 +85,19 @@ vazr
 
 ---
 
+## Release Publishing
+
+vazr can publish to npm through GitHub Actions in [publish.yml](.github/workflows/publish.yml).
+
+1. Add repository secret `NPM_TOKEN` (npm automation token with publish access for `@lechakrawarthy/vazr`).
+2. Bump the version in [package.json](package.json).
+3. Push a tag like `v1.3.1` to trigger automatic publish.
+4. Or run the `Publish` workflow manually from the Actions tab.
+
+This avoids local npm login on a new machine and still publishes to the public npm registry.
+
+---
+
 ## CLI Reference
 
 ```
