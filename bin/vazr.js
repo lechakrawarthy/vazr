@@ -58,6 +58,10 @@ Examples:
   $ npx vazr --dry-run
   `);
 
+// Commander shows root help by default when subcommands exist and no root action is defined.
+// Define a no-op action so option-only invocations (e.g. --dry-run) can continue to main scan logic below.
+program.action(() => {});
+
 // ── profile subcommand ────────────────────────────────────────────
 const profileCmd = program.command('profile').description('Manage cleanup profiles');
 
