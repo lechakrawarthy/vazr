@@ -30,7 +30,7 @@ That's a fundamentally different frame. vazr is built for developers who want su
 No install needed:
 
 ```bash
-npx @lechakrawarthy/vazr
+npx @lechakrawarthy/vazr@latest
 ```
 
 Or install globally:

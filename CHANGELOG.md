@@ -5,6 +5,11 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.3.2] — 2026-08-15
+
+### Changed
+- Updated the README quick-start command to prefer `npx @lechakrawarthy/vazr@latest` so npm docs point readers at the newest published release
+
 ## [1.3.1] — 2026-08-06
 
 ### Fixed
@@ -37,7 +42,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Move and delete functionality
 - Platform detection
 
-[Unreleased]: https://github.com/lechakrawarthy/vazr/compare/v1.3.1...HEAD
+[Unreleased]: https://github.com/lechakrawarthy/vazr/compare/v1.3.2...HEAD
+[1.3.2]: https://github.com/lechakrawarthy/vazr/releases/tag/v1.3.2
+[1.3.1]: https://github.com/lechakrawarthy/vazr/releases/tag/v1.3.1
 [1.3.1]: https://github.com/lechakrawarthy/vazr/releases/tag/v1.3.1
 [1.1.0]: https://github.com/lechakrawarthy/vazr/releases/tag/v1.1.0
 [1.0.4]: https://github.com/lechakrawarthy/vazr/releases/tag/v1.0.4
