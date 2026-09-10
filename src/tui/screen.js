@@ -77,12 +77,13 @@ class Screen {
   }
 
   // ── SCAN frame ────────────────────────────────────────────────
-  renderScan(_version, scanText, foundCount) {
+  renderScan(_version, scanText, foundCount, foundBytes) {
     const spin = tok.brand(SPIN[Math.floor(Date.now() / 80) % SPIN.length]);
     const mw = this.W - 30;
     const st = scanText.length > mw ? '…' + scanText.slice(-mw) : scanText;
     const ml = spin + '  ' + tok.primary(st);
-    const mr = tok.muted(fmtN(foundCount) + ' found');
+    const bytesLabel = foundBytes > 0 ? ' · ~' + fmtBytes(foundBytes) + ' reclaimable' : '';
+    const mr = tok.muted(fmtN(foundCount) + ' found' + bytesLabel);
     this._header(ml, mr);
     this.blank(2);
 

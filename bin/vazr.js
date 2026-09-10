@@ -40,11 +40,19 @@ program
   .option('--sort <mode>', 'Sort categories by: size (default), name, count', 'size')
   .option('--profile <name>', 'Load a named profile from ~/.vazr/profiles/ or built-ins')
   .option(
+    '--exclude <paths>',
+    'Comma-separated paths to skip during project/media scanning (repeatable)',
+    (val, previous) => previous.concat(val.split(',').map(s => s.trim()).filter(Boolean)),
+    []
+  )
+  .option('--verbose', 'Print detailed scan activity (which paths are scanned/skipped) to stderr')
+  .option(
     '--export [format]',
     'Export scan results as json or csv without launching the TUI (default: json)',
     false
   )
   .option('--export-output <path>', 'Write export output to file instead of stdout')
+  .option('--no-update-check', 'Skip checking npm for a newer version on startup')
   .addHelpText('after', `
 Examples:
   $ vazr
@@ -53,6 +61,8 @@ Examples:
   $ vazr --min-media 50 --old-days 30
   $ vazr --sort name
   $ vazr --profile minimal
+  $ vazr --exclude "D:\\Backups,E:\\Media"
+  $ vazr --verbose
   $ vazr --export json > bloat-report.json
   $ vazr --export csv --export-output report.csv
   $ npx vazr --dry-run
@@ -159,6 +169,8 @@ program.parse(process.argv);
 if (!process.argv.slice(2).some(a => a === 'profile')) {
   const opts = program.opts();
 
+  if (opts.verbose) process.env.DEBUG = process.env.DEBUG || '1';
+
   let runtimeOptions;
   try {
     // ── Project-local config (.vazr.json in cwd or any parent) ───
@@ -187,12 +199,14 @@ if (!process.argv.slice(2).some(a => a === 'profile')) {
       oldDays: parsePositiveInteger(opts.oldDays, '--old-days'),
       forceDelete: opts.forceDelete,
       logFile: opts.logFile ? normalizePath(opts.logFile) : undefined,
+      excludePaths: (opts.exclude && opts.exclude.length > 0) ? opts.exclude.map(normalizePath) : undefined,
     };
 
     runtimeOptions = buildRuntimeOptions(cliOptions, loadedConfig.config);
     runtimeOptions.version = pkg.version;
     runtimeOptions.configPath = loadedConfig.configPath;
     runtimeOptions.sortBy = opts.sort || 'size';
+    runtimeOptions.updateCheck = opts.updateCheck !== false;
 
     // ── Apply profile (lower priority than explicit CLI flags) ────
     if (opts.profile) {

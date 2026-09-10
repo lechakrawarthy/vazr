@@ -32,6 +32,21 @@ Files are categorized into buckets during scanning:
 - `devArtifacts` — node_modules, build/, dist/, etc.
 - `otherLarge` — Catch-all for large files
 
+**Since v1.4, one walk does the work of four:** `devArtifacts`, `largeMedia`,
+`otherLarge`, and `downloads` used to each independently walk the project
+directories and/or Downloads folder — the same tree, re-read up to four times.
+`scanner.scanWorkspace()` now walks each root exactly once and classifies every
+entry as it's encountered: a directory matching a known artifact name (e.g.
+`node_modules`) is sized and not descended into further; everything else is
+checked against the media/large-file thresholds; Downloads additionally gets an
+age check. The original single-purpose functions (`scanDevArtifacts`,
+`scanLargeMedia`, `scanLargeFiles`, `scanOldDownloads`) still exist and are
+still tested — `scanWorkspace` is what production actually calls.
+
+`--exclude <path>` (or `excludePaths` in a config file) prunes a subtree before
+it's even read, which both narrows results and cuts scan time on large
+irrelevant directories.
+
 ### Scanner Output
 
 ```javascript
@@ -158,8 +173,9 @@ Tests use Node's built-in `test` module. Key test areas:
 
 ## Future Improvements
 
+- [x] Profile and optimize I/O on very large codebases — v1.4 collapsed the four
+      overlapping full-tree scans into one unified walk (`scanWorkspace`)
 - [ ] Add caching layer for repeated scans
-- [ ] Profile and optimize I/O on very large codebases (>1M files)
 - [ ] Add plugin system for custom scan categories
 - [ ] Support for Windows Event Logs integration
 - [ ] Scheduler for automated cleanup

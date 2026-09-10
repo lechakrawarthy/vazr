@@ -69,6 +69,13 @@ vazr
 - **Project-local config** — drop a `.vazr.json` in any directory and vazr auto-applies it; commit it to a repo so the whole team gets the same behavior
 - **`--profile`** flag — `vazr --profile minimal` to apply any named profile; explicit CLI flags always win
 
+### v1.4 — The Performance Update
+- **~1.5x faster scans** — the dev-artifacts, large-media, catch-all, and old-downloads scans used to independently re-walk the same directory trees (up to 4x over on a repo-heavy machine); they're now one unified pass. Measured on a real dev machine: ~58% fewer `readdir` calls, ~50% fewer `stat` calls
+- **Live space estimate** — the scan screen now shows a running "~X reclaimable" total as it finds things, instead of only revealing it once scanning finishes
+- **`--exclude <paths>`** — skip specific paths during scanning (comma-separated, repeatable, or set `excludePaths` in a config file); excluded paths are pruned before they're even read, so this speeds up scans too, not just filters them
+- **`--verbose`** — see exactly which roots are being scanned, which folders get flagged as dev artifacts, and which paths get skipped
+- **Update notices** — a one-line, opt-out nudge at the end of a run if a newer version is on npm; never blocks a scan, fails silently offline
+
 ---
 
 ## Common Workflows
@@ -84,6 +91,8 @@ vazr
 | Move files to another drive | `vazr --target "D:\Archive"` |
 | Custom thresholds | `vazr --min-media 50 --old-days 14` |
 | Sort by name in TUI | `vazr --sort name` |
+| Skip a path entirely | `vazr --exclude "D:\Backups,E:\Media"` |
+| See exactly what's being scanned | `vazr --verbose` |
 
 ---
 
@@ -117,8 +126,11 @@ Options:
   --old-days <days>          Flag downloads not accessed in N days (default: 60)
   --sort <mode>              Initial TUI sort: size (default) | name | count
   --profile <name>           Apply a named profile (built-in or user-defined)
+  --exclude <paths>          Comma-separated paths to skip while scanning (repeatable)
+  --verbose                  Print detailed scan activity to stderr
   --export [format]          Output results as json or csv, skip TUI (default: json)
   --export-output <path>     Write export to file instead of stdout
+  --no-update-check          Skip checking npm for a newer version on startup
   -h, --help                 Show help
 
 Commands:
@@ -258,7 +270,8 @@ Set persistent defaults in JSON. Config is applied at lower priority than CLI fl
   "minLargeMB": 500,
   "oldDays": 60,
   "logFile": "C:\\Users\\you\\.vazr\\logs\\cleanup.log",
-  "forceDelete": false
+  "forceDelete": false,
+  "excludePaths": ["H:\\Archive", "D:\\Backups"]
 }
 ```
 

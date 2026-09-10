@@ -103,6 +103,22 @@ function isExcluded(filePath) {
   return platform.getExcludedPaths().some(ex => lower === ex || lower.startsWith(ex + path.sep));
 }
 
+/**
+ * Builds a path-exclusion check combining vazr's built-in protected paths
+ * with user-supplied --exclude paths.
+ * @param {string[]} [userExcludes]
+ * @returns {(filePath: string) => boolean}
+ */
+function makeExcludeChecker(userExcludes) {
+  const base = platform.getExcludedPaths();
+  const extra = (userExcludes || []).map(p => path.resolve(p).toLowerCase());
+  const all = base.concat(extra);
+  return function isPathExcluded(filePath) {
+    const lower = filePath.toLowerCase();
+    return all.some(ex => lower === ex || lower.startsWith(ex + path.sep));
+  };
+}
+
 // ── Scanners ─────────────────────────────────────────────────
 
 /**
@@ -116,6 +132,7 @@ async function scanTempCache(onProgress) {
   let totalSize = 0;
 
   for (const p of tempPaths) {
+    debugLog(`scanning temp root: ${p}`);
     if (onProgress) onProgress(`Scanning temp: ${p}`);
     await walk(p, 10,
       (f, stat) => { files.push({ path: f, size: stat.size }); totalSize += stat.size; },
@@ -234,6 +251,164 @@ async function scanDevArtifacts(onProgress) {
 }
 
 /**
+ * Single-pass replacement for scanDevArtifacts + scanLargeMedia + scanLargeFiles +
+ * scanOldDownloads. Those four scanners each independently re-walk the same
+ * project/Downloads directory trees; on a machine with a few large repos this means
+ * every file under `node_modules` (etc.) gets `readdir`/`stat`-ed three or four times
+ * over. This walks each root exactly once and classifies as it goes.
+ *
+ * Behavioral notes vs. the four separate scanners:
+ * - A file's byte size still counts once it's inside a matched dev-artifact folder
+ *   (e.g. `node_modules`) — that folder is not re-descended into for media/large-file
+ *   detection, so a big file inside it is reflected in the folder's total instead of
+ *   also appearing under "Other Large Files". This avoids double-counting the same
+ *   bytes across two categories.
+ * - Old-downloads detection still only applies within the Downloads folder, still
+ *   capped at depth 4 there (media/large detection in Downloads still goes to depth 6,
+ *   matching the previous behavior).
+ * - User-supplied excludePaths prune whole subtrees before they're even read, which is
+ *   both a correctness and a performance win over the old file-level-only exclusion.
+ *
+ * @param {{ minMediaBytes: number, minLargeBytes: number, oldDownloadsCutoffMs: number, excludePaths?: string[] }} opts
+ * @param {((msg: string, runningBytes: number) => void) | undefined} onProgress
+ * @returns {Promise<{
+ *   devArtifacts: { folders: Array<{path:string,size:number,name:string}>, totalSize: number },
+ *   media: { files: Array<{path:string,size:number}>, totalSize: number },
+ *   large: { files: Array<{path:string,size:number}>, totalSize: number },
+ *   oldDownloads: { files: Array<{path:string,size:number}>, totalSize: number },
+ * }>}
+ */
+async function scanWorkspace(opts, onProgress) {
+  const { minMediaBytes, minLargeBytes, oldDownloadsCutoffMs, excludePaths } = opts;
+  const isPathExcluded = makeExcludeChecker(excludePaths);
+
+  const devFolders = [];
+  const mediaFiles = [];
+  const largeFiles = [];
+  const oldDownloadFiles = [];
+  let devTotalSize = 0;
+  let mediaTotalSize = 0;
+  let largeTotalSize = 0;
+  let oldDownloadsTotalSize = 0;
+
+  function report(msg) {
+    if (onProgress) onProgress(msg, devTotalSize + mediaTotalSize + largeTotalSize + oldDownloadsTotalSize);
+  }
+
+  function classifySizedFile(full, stat) {
+    if (isExcluded(full) || isPathExcluded(full)) return;
+    const size = stat.size;
+    const ext = path.extname(full).toLowerCase();
+    if (size >= minMediaBytes && MEDIA_EXTENSIONS.has(ext)) {
+      mediaFiles.push({ path: full, size });
+      mediaTotalSize += size;
+      report(`Scanning... ${mediaFiles.length + largeFiles.length} large files found`);
+    } else if (size >= minLargeBytes) {
+      largeFiles.push({ path: full, size });
+      largeTotalSize += size;
+      report(`Scanning... ${mediaFiles.length + largeFiles.length} large files found`);
+    }
+  }
+
+  // Walks a project root (Documents, Projects, repos, ...): detects dev-artifact
+  // folders (and stops descending into them) plus media/large files elsewhere.
+  async function walkProjectRoot(dir, depth) {
+    if (depth > 6) return;
+    if (isPathExcluded(dir)) { debugLog(`skipping excluded path: ${dir}`); return; }
+    if (depth === 0) debugLog(`scanning project root: ${dir}`);
+    let entries;
+    try {
+      entries = await schedule(() => fsp.readdir(dir, { withFileTypes: true }));
+    } catch { return; }
+
+    const subtasks = [];
+    for (const entry of entries) {
+      if (entry.isSymbolicLink()) continue;
+      const full = path.join(dir, entry.name);
+      if (entry.isDirectory()) {
+        if (ARTIFACT_NAMES.has(entry.name)) {
+          if (isPathExcluded(full)) { debugLog(`skipping excluded path: ${full}`); continue; }
+          subtasks.push(
+            getDirSize(full).then(size => {
+              devFolders.push({ path: full, size, name: entry.name });
+              devTotalSize += size;
+              debugLog(`dev artifact found: ${full} (${size} bytes)`);
+              report(`Scanning dev artifacts... ${devFolders.length} folders`);
+            })
+          );
+        } else {
+          subtasks.push(walkProjectRoot(full, depth + 1));
+        }
+      } else if (entry.isFile()) {
+        subtasks.push(
+          schedule(() => fsp.stat(full)).then(stat => classifySizedFile(full, stat)).catch(err => {
+            if (err.code !== 'EACCES' && err.code !== 'EPERM') {
+              debugLog(`unexpected stat error at ${full}: ${err.code} ${err.message}`);
+            }
+          })
+        );
+      }
+    }
+    await Promise.all(subtasks);
+  }
+
+  // Walks the Downloads root: age-based staleness (depth <= 4) plus media/large
+  // detection (depth <= 6). No dev-artifact detection here (matches old behavior).
+  async function walkDownloadsRoot(dir, depth) {
+    if (depth > 6) return;
+    if (isPathExcluded(dir)) { debugLog(`skipping excluded path: ${dir}`); return; }
+    if (depth === 0) debugLog(`scanning downloads root: ${dir}`);
+    let entries;
+    try {
+      entries = await schedule(() => fsp.readdir(dir, { withFileTypes: true }));
+    } catch { return; }
+
+    const subtasks = [];
+    for (const entry of entries) {
+      if (entry.isSymbolicLink()) continue;
+      const full = path.join(dir, entry.name);
+      if (entry.isDirectory()) {
+        subtasks.push(walkDownloadsRoot(full, depth + 1));
+      } else if (entry.isFile()) {
+        subtasks.push(
+          schedule(() => fsp.stat(full)).then(stat => {
+            if (depth <= 4) {
+              const lastActivity = Math.max(stat.mtimeMs || 0, stat.atimeMs || 0);
+              if (lastActivity < oldDownloadsCutoffMs) {
+                oldDownloadFiles.push({ path: full, size: stat.size });
+                oldDownloadsTotalSize += stat.size;
+                report(`Scanning Downloads... ${oldDownloadFiles.length} old files`);
+              }
+            }
+            classifySizedFile(full, stat);
+          }).catch(err => {
+            if (err.code !== 'EACCES' && err.code !== 'EPERM') {
+              debugLog(`unexpected stat error at ${full}: ${err.code} ${err.message}`);
+            }
+          })
+        );
+      }
+    }
+    await Promise.all(subtasks);
+  }
+
+  const scanRoots = platform.getScanRoots();
+  const downloadsPath = platform.getDownloadsPath();
+  const downloadsExists = fs.existsSync(downloadsPath) && !platform.isProtectedPath(downloadsPath);
+
+  const tasks = scanRoots.map(root => walkProjectRoot(root, 0));
+  if (downloadsExists) tasks.push(walkDownloadsRoot(downloadsPath, 0));
+  await Promise.all(tasks);
+
+  return {
+    devArtifacts: { folders: devFolders, totalSize: devTotalSize },
+    media: { files: mediaFiles, totalSize: mediaTotalSize },
+    large: { files: largeFiles, totalSize: largeTotalSize },
+    oldDownloads: { files: oldDownloadFiles, totalSize: oldDownloadsTotalSize },
+  };
+}
+
+/**
  * Catch-all scan for files at or above `minBytes`, excluding paths already found
  * by other scanners.
  * @param {number} minBytes - Minimum size in bytes
@@ -268,5 +443,6 @@ module.exports = {
   scanOldDownloads,
   scanLargeMedia,
   scanDevArtifacts,
+  scanWorkspace,
   scanLargeFiles,
 };

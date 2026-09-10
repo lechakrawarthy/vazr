@@ -1,6 +1,6 @@
 {
   "name": "@lechakrawarthy/vazr",
-  "version": "1.3.2",
+  "version": "1.4.0",
   "description": "Terminal UI for finding and eliminating disk bloat",
   "author": "lechakrawarthy",
   "license": "MIT",
@@ -34,7 +34,7 @@
   },
   "scripts": {
     "start": "node ./bin/vazr.js",
-    "test": "node --test test/config.test.js test/validators.test.js test/scanner.test.js test/executor.test.js test/platform.test.js"
+    "test": "node --test test/config.test.js test/validators.test.js test/scanner.test.js test/executor.test.js test/platform.test.js test/update-check.test.js"
   },
   "bin": {
     "vazr": "bin/vazr.js"

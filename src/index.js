@@ -8,6 +8,7 @@ const scanner = require('./scanner');
 const executor = require('./executor');
 const { createLogger } = require('./logger');
 const { exportResults } = require('./exporter');
+const { checkForUpdate } = require('./update-check');
 const {
   Screen, ESC, tok,
   enableRaw, disableRaw, nextKey,
@@ -103,7 +104,13 @@ async function run(options = {}) {
     exportOutput = null,
     sortBy = 'size',
     scanCategories = null, // null = all; array of keys to include
+    excludePaths = [],
+    updateCheck = true,
   } = options;
+
+  // Kicked off now, awaited (with its own internal timeout) right before exit —
+  // never blocks the scan/review/execute flow.
+  const updateCheckPromise = checkForUpdate({ enabled: updateCheck });
 
   const logger = createLogger(logFile);
   const destination = await resolveDestinationTarget(target);
@@ -146,28 +153,38 @@ async function run(options = {}) {
   const scanStartTime = Date.now();
   let scanText = 'Starting scan...';
   let foundCount = 0;
+  let scanBytesSoFar = 0;
 
-  const onProgress = (text) => {
+  const onProgress = (text, bytes) => {
     scanText = text;
-    screen.renderScan(version, scanText, foundCount);
+    if (typeof bytes === 'number') scanBytesSoFar = bytes;
+    screen.renderScan(version, scanText, foundCount, scanBytesSoFar);
     screen.tick();
   };
 
   const tempResult = await scanner.scanTempCache(onProgress);
   foundCount += tempResult.files.length;
+  scanBytesSoFar = tempResult.totalSize;
 
-  const dlResult = await scanner.scanOldDownloads(oldDays, onProgress);
-  foundCount += dlResult.files.length;
+  // One combined walk replaces four overlapping ones (dev artifacts, media, large
+  // files, and old downloads previously each re-walked the same project trees).
+  const workspaceResult = await scanner.scanWorkspace(
+    {
+      minMediaBytes: minMediaMB * 1024 * 1024,
+      minLargeBytes: minLargeMB * 1024 * 1024,
+      oldDownloadsCutoffMs: Date.now() - oldDays * 86400 * 1000,
+      excludePaths,
+    },
+    (text, bytes) => onProgress(text, tempResult.totalSize + bytes)
+  );
 
-  const mediaResult = await scanner.scanLargeMedia(minMediaMB * 1024 * 1024, onProgress);
-  foundCount += mediaResult.files.length;
+  const dlResult = workspaceResult.oldDownloads;
+  const mediaResult = workspaceResult.media;
+  const devResult = workspaceResult.devArtifacts;
+  const largeResult = workspaceResult.large;
 
-  const devResult = await scanner.scanDevArtifacts(onProgress);
-  foundCount += devResult.folders ? devResult.folders.length : 0;
-
-  const alreadyFound = mediaResult.files.map(f => f.path);
-  const largeResult = await scanner.scanLargeFiles(minLargeMB * 1024 * 1024, alreadyFound, onProgress);
-  foundCount += largeResult.files.length;
+  foundCount += dlResult.files.length + mediaResult.files.length +
+    devResult.folders.length + largeResult.files.length;
 
   const scanDurationMs = Date.now() - scanStartTime;
 
@@ -385,6 +402,15 @@ async function run(options = {}) {
     moved: totalMoved,
     dryRun,
   });
+
+  const newerVersion = await updateCheckPromise;
+  if (newerVersion) {
+    console.log(
+      '\n  ' + chalk.yellow('A newer version of vazr is available: ') +
+      chalk.dim(version) + chalk.yellow(' → ') + chalk.green.bold(newerVersion) +
+      chalk.dim('\n  Run ') + chalk.cyan('npm install -g @lechakrawarthy/vazr@latest') + chalk.dim(' to update.\n')
+    );
+  }
 }
 
 module.exports = { run };
