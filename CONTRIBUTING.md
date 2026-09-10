@@ -2,6 +2,22 @@
 
 Thanks for considering a contribution. vazr is a small, focused tool — contributions should stay aligned with that.
 
+## Never opened a pull request before? Start here.
+
+You don't need git, Node.js, or a terminal for most issues labeled [`good first issue`](https://github.com/lechakrawarthy/vazr/issues?q=is%3Aissue+is%3Aopen+label%3A%22good+first+issue%22) — many of them are doc/text edits you can do entirely in the browser:
+
+1. Open the file GitHub tells you to edit (the issue will link it, e.g. `README.md`).
+2. Click the pencil icon (✏️) in the top-right corner of the file to edit it in your browser.
+3. Make the change exactly as described in the issue.
+4. Scroll down, add a short commit message, and choose **"Create a new branch and start a pull request."**
+5. Click **Propose changes**, then **Create pull request**.
+
+That's it — no install required. If a step in an issue doesn't make sense, comment on the issue and ask; that's normal, not a bother.
+
+**Before you start:** comment on the issue (e.g. "I'd like to try this") so two people don't work on the same thing at once. If someone's already claimed it, look for another open `good first issue` — there's always more than one.
+
+**If your PR hits a merge conflict** because someone else's change landed first: that's expected, especially during Hacktoberfest when several people grab similar issues. It's not a mistake on your part — ask for help in the PR and we'll sort it out together.
+
 ## Getting started
 
 ```bash
