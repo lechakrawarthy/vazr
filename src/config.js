@@ -19,11 +19,12 @@ function getDefaultOptions() {
         oldDays: 60,
         forceDelete: false,
         logFile: path.join(APP_DIR, 'logs', 'cleanup.log'),
+        excludePaths: [],
     };
 }
 
 const KNOWN_KEYS = new Set([
-    'dryRun', 'target', 'minMediaMB', 'minLargeMB', 'oldDays', 'forceDelete', 'logFile',
+    'dryRun', 'target', 'minMediaMB', 'minLargeMB', 'oldDays', 'forceDelete', 'logFile', 'excludePaths',
 ]);
 
 function validateConfig(cfg, configPath) {
@@ -56,6 +57,13 @@ function validateConfig(cfg, configPath) {
     for (const key of strings) {
         if (cfg[key] !== undefined && cfg[key] !== null && typeof cfg[key] !== 'string') {
             throw new Error(`Config "${key}" must be a string. Got: ${JSON.stringify(cfg[key])} ${label}`);
+        }
+    }
+
+    if (cfg.excludePaths !== undefined) {
+        const v = cfg.excludePaths;
+        if (!Array.isArray(v) || !v.every(p => typeof p === 'string')) {
+            throw new Error(`Config "excludePaths" must be an array of strings. Got: ${JSON.stringify(v)} ${label}`);
         }
     }
 }

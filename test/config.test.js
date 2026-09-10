@@ -40,3 +40,25 @@ test('loadConfig throws for invalid JSON', () => {
 
     assert.throws(() => loadConfig(configPath), /Invalid JSON/);
 });
+
+test('default options include an empty excludePaths list', () => {
+    const defaults = getDefaultOptions();
+    assert.deepEqual(defaults.excludePaths, []);
+});
+
+test('loadConfig accepts a valid excludePaths array', () => {
+    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'disk-cleanup-config-test-'));
+    const configPath = path.join(tempDir, 'config.json');
+    fs.writeFileSync(configPath, JSON.stringify({ excludePaths: ['/some/path'] }), 'utf8');
+
+    const loaded = loadConfig(configPath);
+    assert.deepEqual(loaded.config.excludePaths, ['/some/path']);
+});
+
+test('loadConfig rejects a non-array excludePaths', () => {
+    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'disk-cleanup-config-test-'));
+    const configPath = path.join(tempDir, 'config.json');
+    fs.writeFileSync(configPath, JSON.stringify({ excludePaths: '/some/path' }), 'utf8');
+
+    assert.throws(() => loadConfig(configPath), /excludePaths.*must be an array of strings/);
+});
