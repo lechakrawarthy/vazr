@@ -154,6 +154,17 @@ test('describes what should happen', () => {
 - [ ] Updated CHANGELOG.md if adding a feature
 - [ ] Updated README if behavior changed
 
+## Releasing
+
+vazr publishes to npm through GitHub Actions in [publish.yml](.github/workflows/publish.yml) — this is maintainer-only, not part of a regular contribution.
+
+1. Repository secret `NPM_TOKEN` must be set to an **Automation** token with publish access for `@lechakrawarthy/vazr` (a regular "Publish" token or a granular token without 2FA bypass will fail CI publishes with an `EOTP` error — there's no way to enter a one-time password inside a GitHub Action).
+2. Bump the version in [package.json](package.json).
+3. Push a tag matching that version, e.g. `v1.4.1`, to trigger automatic publish.
+4. Or run the `Publish` workflow manually from the Actions tab (`workflow_dispatch`).
+
+This avoids local npm login on a new machine and still publishes to the public npm registry.
+
 ## Getting Help
 
 - Check existing issues and discussions
