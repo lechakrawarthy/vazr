@@ -100,19 +100,6 @@ vazr
 
 ---
 
-## Publicación de versiones
-
-vazr puede publicar en npm mediante GitHub Actions en [publish.yml](.github/workflows/publish.yml).
-
-1. Añade el secreto del repositorio `NPM_TOKEN` (token de automatización de npm con permisos de publicación para `@lechakrawarthy/vazr`).
-2. Incrementa la versión en [package.json](package.json).
-3. Haz push de una etiqueta como `v1.3.1` para activar la publicación automática.
-4. O ejecuta manualmente el flujo de trabajo `Publish` desde la pestaña Actions.
-
-Esto evita tener que iniciar sesión localmente en npm en una máquina nueva y permite seguir publicando en el registro público de npm.
-
----
-
 ## Referencia de la CLI
 
 ```
