@@ -10,7 +10,7 @@
 
 **Quick Links:** [Features](#features) · [Quick Start](#quick-start) · [CLI Reference](#cli-reference) · [Profiles](#profiles-v13) · [Export](#export-v12) · [Config](#config-file) · [Contributing](CONTRIBUTING.md)
 
-🌍 **Languages:** English (default) — this README isn't translated yet. Want to add yours? Look for an issue labeled [`translation`](https://github.com/lechakrawarthy/vazr/issues?q=is%3Aissue+is%3Aopen+label%3Atranslation), or open one for a language that isn't listed.
+🌍 **Languages:** English (default) - this README isn't translated yet. Want to add yours? Look for an issue labeled [`translation`](https://github.com/lechakrawarthy/vazr/issues?q=is%3Aissue+is%3Aopen+label%3Atranslation), or open one for a language that isn't listed.
 
 ---
 
@@ -19,7 +19,7 @@
 Every other disk cleaner asks *"how much can I delete?"*  
 vazr asks *"what actually shouldn't be here?"*
 
-That's a fundamentally different frame. vazr is built for developers who want surgical precision — not a blunt nuke. It scans by category, shows you a breakdown before you act, lets you define reusable cleanup profiles, and exports results to pipe into other tools. Safe defaults. Zero surprises.
+That's a fundamentally different frame. vazr is built for developers who want surgical precision - not a blunt nuke. It scans by category, shows you a breakdown before you act, lets you define reusable cleanup profiles, and exports results to pipe into other tools. Safe defaults. Zero surprises.
 
 ## TUI Preview
 
@@ -47,34 +47,34 @@ vazr
 ## Features
 
 ### Core
-- **Interactive TUI** — keyboard-driven review with live size breakdown before you commit to anything
-- **5 scan categories** — temp/cache, old downloads, large media, dev artifacts (node_modules, dist, .cache...), other large files
-- **Safe delete by default** — deletes go to OS Trash/Recycle Bin; permanent delete requires `--force-delete` and typing `DELETE` to confirm
-- **Move to external drive** — preserves original folder structure on the destination
-- **`--dry-run`** — full scan and preview with zero side effects
-- **Audit log** — timestamped record of every operation at `~/.vazr/logs/cleanup.log`
-- **Cross-platform** — Windows, macOS, Linux
+- **Interactive TUI** - keyboard-driven review with live size breakdown before you commit to anything
+- **5 scan categories** - temp/cache, old downloads, large media, dev artifacts (node_modules, dist, .cache...), other large files
+- **Safe delete by default** - deletes go to OS Trash/Recycle Bin; permanent delete requires `--force-delete` and typing `DELETE` to confirm
+- **Move to external drive** - preserves original folder structure on the destination
+- **`--dry-run`** - full scan and preview with zero side effects
+- **Audit log** - timestamped record of every operation at `~/.vazr/logs/cleanup.log`
+- **Cross-platform** - Windows, macOS, Linux
 
-### v1.2 — Sharpen the Blade
-- **Category summary before TUI** — see total size per category and percentage share before entering the interactive review; strategic decision before tactical one
-- **Sort in TUI** — press `S` to cycle sort modes (size → name → count); `--sort` sets the default
-- **`--export`** — dump scan results as JSON or CSV without opening the TUI; pipe into other tools or save to file
-- **Smarter age detection** — old downloads now use `max(mtime, atime)` so recently-opened files aren't falsely flagged
-- **Enhanced `--version`** — reports `vazr/x.y.z node/vX platform/arch` for easier debugging
+### v1.2 - Sharpen the Blade
+- **Category summary before TUI** - see total size per category and percentage share before entering the interactive review; strategic decision before tactical one
+- **Sort in TUI** - press `S` to cycle sort modes (size → name → count); `--sort` sets the default
+- **`--export`** - dump scan results as JSON or CSV without opening the TUI; pipe into other tools or save to file
+- **Smarter age detection** - old downloads now use `max(mtime, atime)` so recently-opened files aren't falsely flagged
+- **Enhanced `--version`** - reports `vazr/x.y.z node/vX platform/arch` for easier debugging
 
-### v1.3 — Profiles
-- **Named profiles** — save and reuse cleanup configurations in `~/.vazr/profiles/`
-- **5 built-in profiles** — `minimal`, `aggressive`, `media`, `dry-run`, `downloads` — zero setup needed
-- **Profile CLI** — `vazr profile list / create / export / import / delete`
-- **Project-local config** — drop a `.vazr.json` in any directory and vazr auto-applies it; commit it to a repo so the whole team gets the same behavior
-- **`--profile`** flag — `vazr --profile minimal` to apply any named profile; explicit CLI flags always win
+### v1.3 - Profiles
+- **Named profiles** - save and reuse cleanup configurations in `~/.vazr/profiles/`
+- **5 built-in profiles** - `minimal`, `aggressive`, `media`, `dry-run`, `downloads` - zero setup needed
+- **Profile CLI** - `vazr profile list / create / export / import / delete`
+- **Project-local config** - drop a `.vazr.json` in any directory and vazr auto-applies it; commit it to a repo so the whole team gets the same behavior
+- **`--profile`** flag - `vazr --profile minimal` to apply any named profile; explicit CLI flags always win
 
-### v1.4 — The Performance Update
-- **~1.5x faster scans** — the dev-artifacts, large-media, catch-all, and old-downloads scans used to independently re-walk the same directory trees (up to 4x over on a repo-heavy machine); they're now one unified pass. Measured on a real dev machine: ~58% fewer `readdir` calls, ~50% fewer `stat` calls
-- **Live space estimate** — the scan screen now shows a running "~X reclaimable" total as it finds things, instead of only revealing it once scanning finishes
-- **`--exclude <paths>`** — skip specific paths during scanning (comma-separated, repeatable, or set `excludePaths` in a config file); excluded paths are pruned before they're even read, so this speeds up scans too, not just filters them
-- **`--verbose`** — see exactly which roots are being scanned, which folders get flagged as dev artifacts, and which paths get skipped
-- **Update notices** — a one-line, opt-out nudge at the end of a run if a newer version is on npm; never blocks a scan, fails silently offline
+### v1.4 - The Performance Update
+- **~1.5x faster scans** - the dev-artifacts, large-media, catch-all, and old-downloads scans used to independently re-walk the same directory trees (up to 4x over on a repo-heavy machine); they're now one unified pass. Measured on a real dev machine: ~58% fewer `readdir` calls, ~50% fewer `stat` calls
+- **Live space estimate** - the scan screen now shows a running "~X reclaimable" total as it finds things, instead of only revealing it once scanning finishes
+- **`--exclude <paths>`** - skip specific paths during scanning (comma-separated, repeatable, or set `excludePaths` in a config file); excluded paths are pruned before they're even read, so this speeds up scans too, not just filters them
+- **`--verbose`** - see exactly which roots are being scanned, which folders get flagged as dev artifacts, and which paths get skipped
+- **Update notices** - a one-line, opt-out nudge at the end of a run if a newer version is on npm; never blocks a scan, fails silently offline
 
 ---
 
@@ -107,7 +107,7 @@ Options:
   --config <path>            Path to JSON config file
   --log-file <path>          Path to audit log file
   --dry-run                  Preview without touching anything
-  --force-delete             Permanent delete — bypasses Trash/Recycle Bin
+  --force-delete             Permanent delete - bypasses Trash/Recycle Bin
   --min-media <mb>           Flag media files larger than N MB (default: 100)
   --min-large <mb>           Flag all files larger than N MB (default: 500)
   --old-days <days>          Flag downloads not accessed in N days (default: 60)
@@ -162,7 +162,7 @@ Profiles let you define how you want to clean once, save it, and run it repeated
 ### Built-in profiles
 
 ```bash
-vazr --profile minimal      # temp + node_modules only — safe for everyday use
+vazr --profile minimal      # temp + node_modules only - safe for everyday use
 vazr --profile aggressive   # everything, lower thresholds
 vazr --profile media        # large media files only
 vazr --profile dry-run      # full scan, zero side effects
@@ -273,10 +273,10 @@ Config search order (highest priority first):
 
 ## Safety Model
 
-- **Default deletes go to Trash/Recycle Bin** — you can recover mistakes
+- **Default deletes go to Trash/Recycle Bin** - you can recover mistakes
 - **`--force-delete`** bypasses the Trash and requires typing `DELETE` at a confirmation prompt
-- **Protected paths** — system directories are never touched regardless of what's in them
-- **`--dry-run`** — zero side effects; scans and shows results, does nothing
+- **Protected paths** - system directories are never touched regardless of what's in them
+- **`--dry-run`** - zero side effects; scans and shows results, does nothing
 
 ---
 
@@ -307,7 +307,7 @@ vazr is open source and welcomes contributions.
 3. **Write code** → Read [CONTRIBUTING.md](CONTRIBUTING.md) then [DEVELOPMENT.md](DEVELOPMENT.md)
 4. **First contribution?** → Look for [good first issue](https://github.com/lechakrawarthy/vazr/issues?q=label%3A%22good+first+issue%22) labels
 
-**Security issues** — please report via [SECURITY.md](SECURITY.md), not public issues.
+**Security issues** - please report via [SECURITY.md](SECURITY.md), not public issues.
 
 ---
 
