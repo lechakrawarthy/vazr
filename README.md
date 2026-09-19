@@ -10,7 +10,7 @@
 
 **Quick Links:** [Features](#features) · [Quick Start](#quick-start) · [CLI Reference](#cli-reference) · [Profiles](#profiles-v13) · [Export](#export-v12) · [Config](#config-file) · [Contributing](CONTRIBUTING.md)
 
-🌍 **Languages:** English (default) - this README isn't translated yet. Want to add yours? Look for an issue labeled [`translation`](https://github.com/lechakrawarthy/vazr/issues?q=is%3Aissue+is%3Aopen+label%3Atranslation), or open one for a language that isn't listed.
+🌍 **Languages:** English (default) · [Español](README.es.md) — want to add yours? Look for an issue labeled [`translation`](https://github.com/lechakrawarthy/vazr/issues?q=is%3Aissue+is%3Aopen+label%3Atranslation), or open one for a language that isn't listed.
 
 ---
 
