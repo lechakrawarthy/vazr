@@ -39,5 +39,10 @@ jobs:
       - name: CLI profile list smoke test
         run: node ./bin/vazr.js profile list
 
+      # No TTY, stdout redirected: the export must never prompt and must be pure JSON.
+      - name: CLI export smoke test
+        shell: bash
+        run: node ./bin/vazr.js --export json --no-update-check < /dev/null | node -e "JSON.parse(require('fs').readFileSync(0, 'utf8'))"
+
       - name: Security audit (prod deps only)
         run: npm audit --omit=dev --audit-level=high
