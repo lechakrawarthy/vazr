@@ -76,6 +76,13 @@ vazr
 - **`--verbose`** - see exactly which roots are being scanned, which folders get flagged as dev artifacts, and which paths get skipped
 - **Update notices** - a one-line, opt-out nudge at the end of a run if a newer version is on npm; never blocks a scan, fails silently offline
 
+### v1.5 - The Trust Update
+- **Project-aware detection** - a `node_modules`, `build/`, `target/`, `bin/`… folder is only flagged when its project proves what it is (`package.json`, `Cargo.toml`, `*.csproj`, `pyvenv.cfg`…). Your hand-made `Documents/build` folder is never a candidate
+- **Idle vs. active projects** - vazr reads each project's last activity (files + git index) and only pre-selects artifacts from projects idle for 30+ days. The repo you're working in today stays untouched unless you ask. Tune with `--stale-days`
+- **More ecosystems** - .NET, Python virtualenvs and tool caches, Angular, Dart/Flutter, Swift, Elixir, Haskell, Zig; each artifact is tagged with its ecosystem in exports
+- **Last-line safety check** - every delete/move refuses filesystem roots, your home folder, scan roots, and system directories, even in a dry run
+- **Script-safe `--export`** - never prompts, and stdout is only the report, so `vazr --export json > report.json` works in CI and pipes
+
 ---
 
 ## Common Workflows
@@ -90,6 +97,7 @@ vazr
 | Export scan to CSV | `vazr --export csv --export-output report.csv` |
 | Move files to another drive | `vazr --target "D:\Archive"` |
 | Custom thresholds | `vazr --min-media 50 --old-days 14` |
+| Treat projects idle for 2 weeks as stale | `vazr --stale-days 14` |
 | Sort by name in TUI | `vazr --sort name` |
 | Skip a path entirely | `vazr --exclude "D:\Backups,E:\Media"` |
 | See exactly what's being scanned | `vazr --verbose` |
@@ -111,6 +119,7 @@ Options:
   --min-media <mb>           Flag media files larger than N MB (default: 100)
   --min-large <mb>           Flag all files larger than N MB (default: 500)
   --old-days <days>          Flag downloads not accessed in N days (default: 60)
+  --stale-days <days>        Pre-select build artifacts of projects idle N+ days (default: 30)
   --sort <mode>              Initial TUI sort: size (default) | name | count
   --profile <name>           Apply a named profile (built-in or user-defined)
   --exclude <paths>          Comma-separated paths to skip while scanning (repeatable)
@@ -150,7 +159,8 @@ Commands:
 | Temp & Cache | OS temp dirs, browser cache, npm cache | Delete |
 | Old Downloads | Files in Downloads not accessed in N days | Move to drive |
 | Large Media | mp4, mkv, iso, avi, mov… above size threshold | Move to drive |
-| Dev Artifacts | node_modules, dist, build, .cache, .next, __pycache__… | Delete |
+| Dev Artifacts — idle | node_modules, target, build, .venv, bin/obj… in projects idle 30d+ (only when a project marker proves it) | Delete (pre-selected) |
+| Dev Artifacts — active | the same, in projects touched recently | Delete (not pre-selected) |
 | Other Large Files | Catch-all for large files not caught above | Move to drive |
 
 ---
@@ -235,10 +245,16 @@ JSON output shape:
   "categories": [
     {
       "key": "devArt",
-      "label": "Dev Artifacts (node_modules…)",
+      "label": "Dev Artifacts — idle 30d+",
       "count": 12,
       "totalSizeBytes": 4294967296,
-      "items": [{ "path": "/home/user/projects/old/node_modules", "sizeBytes": 512000000 }]
+      "items": [{
+        "path": "/home/user/projects/old/node_modules",
+        "sizeBytes": 512000000,
+        "ecosystem": "Node",
+        "project": "/home/user/projects/old",
+        "lastActivity": "2026-03-02T10:15:00.000Z"
+      }]
     }
   ]
 }
@@ -256,6 +272,7 @@ Set persistent defaults in JSON. Config is applied at lower priority than CLI fl
   "minMediaMB": 100,
   "minLargeMB": 500,
   "oldDays": 60,
+  "staleDays": 30,
   "logFile": "C:\\Users\\you\\.vazr\\logs\\cleanup.log",
   "forceDelete": false,
   "excludePaths": ["H:\\Archive", "D:\\Backups"]

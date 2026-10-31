@@ -43,6 +43,20 @@ age check. The original single-purpose functions (`scanDevArtifacts`,
 `scanLargeMedia`, `scanLargeFiles`, `scanOldDownloads`) still exist and are
 still tested — `scanWorkspace` is what production actually calls.
 
+**Since v1.5, artifact matches are project-aware.** `ARTIFACT_RULES` in
+`scanner.js` maps each folder name to the evidence it needs: a marker file beside
+it (`node_modules` needs `package.json`, `bin` needs a `*.csproj`), a file inside
+it (`.venv` needs `pyvenv.cfg`), or nothing for unambiguous names
+(`__pycache__`). The parent's directory listing is already in hand during the
+walk, so marker checks cost no extra I/O. A name match without evidence is walked
+like any other folder. Each artifact also records its project's last activity
+(newest top-level file mtime, plus `.git/index`/`HEAD` of the enclosing repo);
+`index.js` splits artifacts into idle and active categories with `staleDays`.
+`.git` itself is never descended into.
+
+Every delete or move passes `platform.checkRemovable()` in the executor
+first, so a bad path from upstream can't reach the filesystem.
+
 `--exclude <path>` (or `excludePaths` in a config file) prunes a subtree before
 it's even read, which both narrows results and cuts scan time on large
 irrelevant directories.
