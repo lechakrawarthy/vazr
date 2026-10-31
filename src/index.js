@@ -198,6 +198,7 @@ async function run(options = {}) {
     },
     (text, bytes) => onProgress(text, tempResult.totalSize + bytes)
   );
+  const cacheResult = await scanner.scanToolCaches(onProgress);
 
   const dlResult = workspaceResult.oldDownloads;
   const mediaResult = workspaceResult.media;
@@ -212,7 +213,7 @@ async function run(options = {}) {
   const sumSize = list => list.reduce((s, f) => s + f.size, 0);
 
   foundCount += dlResult.files.length + mediaResult.files.length +
-    devResult.folders.length + largeResult.files.length;
+    devResult.folders.length + largeResult.files.length + cacheResult.folders.length;
 
   if (exportFormat && process.stderr.isTTY) process.stderr.write('\r\x1b[K');
 
@@ -224,6 +225,7 @@ async function run(options = {}) {
     media: mediaResult.files.length,
     devArtifacts: devResult.folders ? devResult.folders.length : 0,
     large: largeResult.files.length,
+    toolCaches: cacheResult.folders.length,
   });
 
   // ── Build categories ───────────────────────────────────────────
@@ -276,6 +278,17 @@ async function run(options = {}) {
       count: activeDev.length,
       size: sumSize(activeDev),
       items: activeDev,
+      isDir: true,
+      defaultAction: 'Delete',
+      defaultChecked: false,
+    },
+    {
+      // Never pre-selected: safe to clear, but each one means a slow re-download.
+      key: 'caches',
+      label: 'Tool Caches (npm, pip, cargo…)',
+      count: cacheResult.folders.length,
+      size: cacheResult.totalSize,
+      items: cacheResult.folders,
       isDir: true,
       defaultAction: 'Delete',
       defaultChecked: false,

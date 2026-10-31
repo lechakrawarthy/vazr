@@ -235,6 +235,22 @@ async function scanTempCache(onProgress) {
 }
 
 /**
+ * Size the package-manager and tool caches that exist on this machine.
+ * @param {((msg: string) => void) | undefined} onProgress
+ * @returns {Promise<{ folders: Array<{path: string, size: number, name: string, ecosystem: string}>, totalSize: number }>}
+ */
+async function scanToolCaches(onProgress) {
+  const caches = platform.getToolCachePaths();
+  const folders = await Promise.all(caches.map(async c => {
+    if (onProgress) onProgress(`Sizing ${c.name} cache...`);
+    debugLog(`tool cache: ${c.path}`);
+    return { path: c.path, size: await getDirSize(c.path), name: c.name, ecosystem: c.name };
+  }));
+  const nonEmpty = folders.filter(f => f.size > 0);
+  return { folders: nonEmpty, totalSize: nonEmpty.reduce((s, f) => s + f.size, 0) };
+}
+
+/**
  * Scan Downloads folder for files not modified within the last `days` days.
  * @param {number} days
  * @param {((msg: string) => void) | undefined} onProgress
@@ -553,6 +569,7 @@ async function scanLargeFiles(minBytes, skipPaths, onProgress) {
 
 module.exports = {
   scanTempCache,
+  scanToolCaches,
   scanOldDownloads,
   scanLargeMedia,
   scanDevArtifacts,

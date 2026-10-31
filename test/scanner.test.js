@@ -368,3 +368,22 @@ test('scanWorkspace puts an old, large download in exactly one category', async 
     assert.equal(hits.length, 1);
   });
 });
+
+test('scanToolCaches sizes each existing cache and drops empty ones', async () => {
+  const dir = tmpDir();
+  const full = path.join(dir, 'cargo');
+  writeFile(full, 'crate.tar', 'x'.repeat(50));
+  const empty = path.join(dir, 'pip');
+  fs.mkdirSync(empty);
+
+  const platform = require('../src/platform');
+  const orig = platform.getToolCachePaths;
+  platform.getToolCachePaths = () => [{ name: 'Cargo registry', path: full }, { name: 'pip', path: empty }];
+  try {
+    const result = await require('../src/scanner').scanToolCaches(undefined);
+    assert.deepEqual(result.folders.map(f => f.name), ['Cargo registry']);
+    assert.equal(result.totalSize, 50);
+  } finally {
+    platform.getToolCachePaths = orig;
+  }
+});
