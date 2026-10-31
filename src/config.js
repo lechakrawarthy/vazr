@@ -17,6 +17,7 @@ function getDefaultOptions() {
         minMediaMB: 100,
         minLargeMB: 500,
         oldDays: 60,
+        staleDays: 30,
         forceDelete: false,
         logFile: path.join(APP_DIR, 'logs', 'cleanup.log'),
         excludePaths: [],
@@ -24,7 +25,7 @@ function getDefaultOptions() {
 }
 
 const KNOWN_KEYS = new Set([
-    'dryRun', 'target', 'minMediaMB', 'minLargeMB', 'oldDays', 'forceDelete', 'logFile', 'excludePaths',
+    'dryRun', 'target', 'minMediaMB', 'minLargeMB', 'oldDays', 'staleDays', 'forceDelete', 'logFile', 'excludePaths',
 ]);
 
 function validateConfig(cfg, configPath) {
@@ -36,7 +37,7 @@ function validateConfig(cfg, configPath) {
         }
     }
 
-    const posInts = ['minMediaMB', 'minLargeMB', 'oldDays'];
+    const posInts = ['minMediaMB', 'minLargeMB', 'oldDays', 'staleDays'];
     for (const key of posInts) {
         if (cfg[key] !== undefined) {
             const v = cfg[key];

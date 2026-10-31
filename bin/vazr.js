@@ -37,6 +37,7 @@ program
   .option('--min-media <mb>', 'Minimum file size in MB to flag as large media')
   .option('--min-large <mb>', 'Minimum file size in MB for the catch-all large files scan')
   .option('--old-days <days>', 'Number of days since last access to flag a download as old')
+  .option('--stale-days <days>', 'Days without activity before a project\'s build artifacts are pre-selected (default: 30)')
   .option('--sort <mode>', 'Sort categories by: size (default), name, count', 'size')
   .option('--profile <name>', 'Load a named profile from ~/.vazr/profiles/ or built-ins')
   .option(
@@ -59,6 +60,7 @@ Examples:
   $ vazr --dry-run
   $ vazr --target D:\\Archive
   $ vazr --min-media 50 --old-days 30
+  $ vazr --stale-days 14
   $ vazr --sort name
   $ vazr --profile minimal
   $ vazr --exclude "D:\\Backups,E:\\Media"
@@ -197,6 +199,7 @@ if (!process.argv.slice(2).some(a => a === 'profile')) {
       minMediaMB: parsePositiveInteger(opts.minMedia, '--min-media'),
       minLargeMB: parsePositiveInteger(opts.minLarge, '--min-large'),
       oldDays: parsePositiveInteger(opts.oldDays, '--old-days'),
+      staleDays: parsePositiveInteger(opts.staleDays, '--stale-days'),
       forceDelete: opts.forceDelete,
       logFile: opts.logFile ? normalizePath(opts.logFile) : undefined,
       excludePaths: (opts.exclude && opts.exclude.length > 0) ? opts.exclude.map(normalizePath) : undefined,
@@ -217,6 +220,7 @@ if (!process.argv.slice(2).some(a => a === 'profile')) {
       if (profile.minMediaMB && !opts.minMedia) runtimeOptions.minMediaMB = profile.minMediaMB;
       if (profile.minLargeMB && !opts.minLarge) runtimeOptions.minLargeMB = profile.minLargeMB;
       if (profile.oldDays && !opts.oldDays) runtimeOptions.oldDays = profile.oldDays;
+      if (profile.staleDays && !opts.staleDays) runtimeOptions.staleDays = profile.staleDays;
       if (profile.scanCategories) runtimeOptions.scanCategories = profile.scanCategories;
     }
 

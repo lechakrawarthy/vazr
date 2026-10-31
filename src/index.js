@@ -106,6 +106,7 @@ async function run(options = {}) {
     scanCategories = null, // null = all; array of keys to include
     excludePaths = [],
     updateCheck = true,
+    staleDays = 30,
   } = options;
 
   if (!exportFormat && !(process.stdin.isTTY && process.stdout.isTTY)) {
@@ -202,6 +203,13 @@ async function run(options = {}) {
   const devResult = workspaceResult.devArtifacts;
   const largeResult = workspaceResult.large;
 
+  // Artifacts of projects you are still working on are shown but never pre-selected:
+  // deleting node_modules in the repo you have open is the opposite of help.
+  const staleCutoffMs = Date.now() - staleDays * 86400 * 1000;
+  const staleDev = devResult.folders.filter(f => f.lastActivityMs < staleCutoffMs);
+  const activeDev = devResult.folders.filter(f => f.lastActivityMs >= staleCutoffMs);
+  const sumSize = list => list.reduce((s, f) => s + f.size, 0);
+
   foundCount += dlResult.files.length + mediaResult.files.length +
     devResult.folders.length + largeResult.files.length;
 
@@ -251,13 +259,25 @@ async function run(options = {}) {
     },
     {
       key: 'devArt',
-      label: 'Dev Artifacts (node_modules…)',
-      count: devResult.folders ? devResult.folders.length : 0,
-      size: devResult.totalSize,
-      items: devResult.folders || [],
+      group: 'devArt',
+      label: `Dev Artifacts — idle ${staleDays}d+`,
+      count: staleDev.length,
+      size: sumSize(staleDev),
+      items: staleDev,
       isDir: true,
       defaultAction: 'Delete',
       defaultChecked: true,
+    },
+    {
+      key: 'devArtActive',
+      group: 'devArt',
+      label: 'Dev Artifacts — active projects',
+      count: activeDev.length,
+      size: sumSize(activeDev),
+      items: activeDev,
+      isDir: true,
+      defaultAction: 'Delete',
+      defaultChecked: false,
     },
     {
       key: 'catchAll',
@@ -276,8 +296,9 @@ async function run(options = {}) {
   }
 
   // ── Apply scanCategories filter (profile / CLI) ───────────────
+  // A profile asking for 'devArt' gets both the idle and the active split.
   const visibleCategories = scanCategories
-    ? categories.filter(c => scanCategories.includes(c.key))
+    ? categories.filter(c => scanCategories.includes(c.key) || (c.group && scanCategories.includes(c.group)))
     : categories;
 
   // ── Export mode (--export): skip TUI entirely ─────────────────
@@ -289,6 +310,7 @@ async function run(options = {}) {
       minMediaMB,
       minLargeMB,
       oldDays,
+      staleDays,
     }, { format: exportFormat, outputPath: exportOutput || null });
     return;
   }
