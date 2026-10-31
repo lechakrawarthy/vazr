@@ -5,7 +5,7 @@ const path = require('path');
 const chalk = require('chalk');
 const inquirer = require('inquirer');
 const scanner = require('./scanner');
-const { runPlan } = require('./plan');
+const { runPlan, buildPlan, defaultSelection } = require('./plan');
 const history = require('./history');
 const { createLogger } = require('./logger');
 const { exportResults } = require('./exporter');
@@ -90,6 +90,42 @@ async function resolveDestinationTarget(initialTarget) {
   };
 }
 
+/**
+ * --yes: no review screen, no prompts. Cleans the categories named with --only,
+ * or the ones vazr pre-selects within a --profile, prints what it did, and records
+ * the run so `vazr undo` works. Sets exit code 2 if any item could not be processed.
+ */
+async function runUnattended(categories, { destRoot, destAvailable, dryRun, logger, version, onlyKeys }) {
+  const selection = onlyKeys
+    ? new Set(categories.filter(c => c.count > 0 && onlyKeys.includes(c.key)).map(c => c.key))
+    : defaultSelection(categories);
+  const plan = buildPlan(categories, selection, new Map(), destAvailable);
+  const say = s => process.stdout.write(s + '\n');
+
+  for (const c of categories) {
+    if (selection.has(c.key) && !plan.some(p => p.key === c.key)) {
+      say(`skipping ${c.label}: it can only be moved, and no --target drive is available`);
+    }
+  }
+
+  if (plan.length === 0) {
+    say('vazr: nothing to clean.');
+    return;
+  }
+  for (const step of plan) {
+    say(`${dryRun ? 'would ' : ''}${step.action} ${step.items.length} item(s), ${fmtBytes(step.size)}  ${step.label}`);
+  }
+
+  const journal = history.createJournal();
+  const totals = await runPlan(plan, { destRoot, dryRun, forceDelete: false, logger, journal });
+  const runId = dryRun ? null : history.saveRun(journal, { version, destRoot, unattended: true });
+  const freed = plan.reduce((s, p) => s + p.size, 0);
+
+  say(`${dryRun ? 'dry run: ' : ''}${totals.done} done, ${totals.skipped} skipped, ~${fmtBytes(freed)}${runId ? '  (run ' + runId + ')' : ''}`);
+  logger.info('cleanup_completed', { processed: totals.done, skipped: totals.skipped, moved: totals.moved, dryRun, runId, unattended: true });
+  if (totals.skipped > 0) process.exitCode = 2;
+}
+
 async function run(options = {}) {
   const {
     dryRun = false,
@@ -108,22 +144,29 @@ async function run(options = {}) {
     excludePaths = [],
     updateCheck = true,
     staleDays = 30,
+    assumeYes = false,
+    onlyKeys = null,
   } = options;
 
-  if (!exportFormat && !(process.stdin.isTTY && process.stdout.isTTY)) {
-    throw new Error('vazr needs an interactive terminal. For scripts and CI, use --export json (or csv).');
+  // Export and --yes runs never draw the TUI or ask anything.
+  const headless = Boolean(exportFormat || assumeYes);
+
+  if (!headless && !(process.stdin.isTTY && process.stdout.isTTY)) {
+    throw new Error('vazr needs an interactive terminal. For scripts and CI, use --export json (or --yes with --only/--profile).');
   }
 
   // Kicked off now, awaited (with its own internal timeout) right before exit —
   // never blocks the scan/review/execute flow.
-  const updateCheckPromise = checkForUpdate({ enabled: updateCheck && !exportFormat });
+  const updateCheckPromise = checkForUpdate({ enabled: updateCheck && !headless });
 
   const logger = createLogger(logFile);
   // Export never moves anything, so it must not stop to ask about a destination:
   // the prompt would hang in CI and end up inside `--export json > report.json`.
   const destination = exportFormat
     ? { target: null, chosenMode: 'export' }
-    : await resolveDestinationTarget(target);
+    : assumeYes
+      ? { target: isDestinationAvailable(target) ? target : null, chosenMode: 'unattended' }
+      : await resolveDestinationTarget(target);
   const destRoot = destination.target;
   const destAvailable = isDestinationAvailable(destRoot);
   const flags = { dryRun, forceDelete, destAvailable };
@@ -145,7 +188,7 @@ async function run(options = {}) {
   // phase is active (scan, review, execute). Safe to call multiple times.
   let cleanupDone = false;
   const exitCleanup = () => {
-    if (cleanupDone || exportFormat) return;
+    if (cleanupDone || headless) return;
     cleanupDone = true;
     try { disableRaw(); } catch { /* ignore if not in raw mode */ }
     process.stdout.write(ESC.altOff + ESC.showCursor + '\n');
@@ -160,7 +203,7 @@ async function run(options = {}) {
   // ── SCAN ──────────────────────────────────────────────────────
   // In export mode stdout carries the report, so progress goes to stderr (and only
   // when someone is watching it).
-  if (!exportFormat) process.stdout.write(ESC.altOn + ESC.hideCursor);
+  if (!headless) process.stdout.write(ESC.altOn + ESC.hideCursor);
 
   const scanStartTime = Date.now();
   let scanText = 'Starting scan...';
@@ -171,7 +214,7 @@ async function run(options = {}) {
   const onProgress = (text, bytes) => {
     scanText = text;
     if (typeof bytes === 'number') scanBytesSoFar = bytes;
-    if (exportFormat) {
+    if (headless) {
       if (process.stderr.isTTY && Date.now() - lastStderrWrite >= 100) {
         lastStderrWrite = Date.now();
         const line = scanText + (scanBytesSoFar > 0 ? '  ~' + fmtBytes(scanBytesSoFar) : '');
@@ -215,7 +258,7 @@ async function run(options = {}) {
   foundCount += dlResult.files.length + mediaResult.files.length +
     devResult.folders.length + largeResult.files.length + cacheResult.folders.length;
 
-  if (exportFormat && process.stderr.isTTY) process.stderr.write('\r\x1b[K');
+  if (headless && process.stderr.isTTY) process.stderr.write('\r\x1b[K');
 
   const scanDurationMs = Date.now() - scanStartTime;
 
@@ -327,6 +370,11 @@ async function run(options = {}) {
       staleDays,
     }, { format: exportFormat, outputPath: exportOutput || null });
     return;
+  }
+
+  // ── Unattended mode (--yes): clean exactly the pre-selection ───
+  if (assumeYes) {
+    return runUnattended(visibleCategories, { destRoot, destAvailable, dryRun, logger, version, onlyKeys });
   }
 
   // All empty?

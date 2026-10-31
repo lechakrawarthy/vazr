@@ -15,6 +15,7 @@ const {
 } = require('../src/validators');
 const profiles = require('../src/profiles');
 const history = require('../src/history');
+const { CATEGORY_KEYS } = require('../src/plan');
 
 const program = new Command();
 
@@ -48,6 +49,8 @@ program
     []
   )
   .option('--verbose', 'Print detailed scan activity (which paths are scanned/skipped) to stderr')
+  .option('--only <keys>', 'Only these categories (comma-separated): ' + CATEGORY_KEYS.join(', '))
+  .option('-y, --yes', 'Unattended: clean the pre-selected categories without the TUI (needs --only or --profile)')
   .option(
     '--export [format]',
     'Export scan results as json or csv without launching the TUI (default: json)',
@@ -66,6 +69,8 @@ Examples:
   $ vazr --profile minimal
   $ vazr --exclude "D:\\Backups,E:\\Media"
   $ vazr --verbose
+  $ vazr --only temp,devArt --yes
+  $ vazr --profile minimal --yes --dry-run
   $ vazr --export json > bloat-report.json
   $ vazr --export csv --export-output report.csv
   $ npx vazr --dry-run
@@ -270,6 +275,27 @@ if (!process.argv.slice(2).some(a => SUBCOMMANDS.includes(a))) {
       if (profile.oldDays && !opts.oldDays) runtimeOptions.oldDays = profile.oldDays;
       if (profile.staleDays && !opts.staleDays) runtimeOptions.staleDays = profile.staleDays;
       if (profile.scanCategories) runtimeOptions.scanCategories = profile.scanCategories;
+    }
+
+    // ── --only (wins over a profile's categories) ─────────────────
+    if (opts.only) {
+      const keys = opts.only.split(',').map(s => s.trim()).filter(Boolean);
+      const unknown = keys.filter(k => !CATEGORY_KEYS.includes(k));
+      if (unknown.length) throw new Error(`Unknown category for --only: ${unknown.join(', ')}. Known: ${CATEGORY_KEYS.join(', ')}`);
+      runtimeOptions.scanCategories = keys;
+      runtimeOptions.onlyKeys = keys;
+    }
+
+    // ── --yes (unattended) ────────────────────────────────────────
+    if (opts.yes) {
+      if (!opts.only && !opts.profile) {
+        throw new Error('--yes needs --only or --profile, so an unattended run only touches what you named.');
+      }
+      if (runtimeOptions.forceDelete) {
+        throw new Error('--yes cannot be combined with --force-delete: permanent deletes always need you to type DELETE.');
+      }
+      if (opts.export !== false) throw new Error('--yes and --export do different things; pick one.');
+      runtimeOptions.assumeYes = true;
     }
 
     // ── Export flag ───────────────────────────────────────────────

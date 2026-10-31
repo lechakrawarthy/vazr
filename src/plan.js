@@ -6,6 +6,9 @@ const { resolveAction } = require('./tui/tokens');
 
 const MOVE_SUBDIRS = { downloads: 'Downloads', media: 'Media' };
 
+// Every category key, for --only and profile validation.
+const CATEGORY_KEYS = ['temp', 'downloads', 'media', 'devArt', 'devArtActive', 'caches', 'catchAll'];
+
 /**
  * Where a moved category lands under the destination root.
  * @param {string} key - category key
@@ -89,4 +92,4 @@ async function runPlan(plan, opts = {}) {
   return totals;
 }
 
-module.exports = { buildPlan, defaultSelection, moveDestination, runPlan };
+module.exports = { CATEGORY_KEYS, buildPlan, defaultSelection, moveDestination, runPlan };
