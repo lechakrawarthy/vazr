@@ -97,3 +97,19 @@ test('getLargeScanRoots returns only existing, non-protected paths', () => {
     assert.equal(isProtectedPath(r), false, `scan root should not be protected: ${r}`);
   }
 });
+
+// ── collapseRoots / checkRemovable ────────────────────────────
+
+test('collapseRoots drops duplicate and nested roots', () => {
+  const { collapseRoots } = require('../src/platform');
+  const base = path.join(os.tmpdir(), 'vazr-roots');
+  const other = path.join(os.tmpdir(), 'vazr-other');
+  const roots = collapseRoots([base, base + path.sep, path.join(base, 'inner'), other]);
+  assert.deepEqual(roots, [path.resolve(base), path.resolve(other)]);
+});
+
+test('getTempPaths never lists the same folder twice', () => {
+  const { getTempPaths } = require('../src/platform');
+  const lower = getTempPaths().map(p => p.toLowerCase());
+  assert.equal(new Set(lower).size, lower.length);
+});

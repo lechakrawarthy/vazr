@@ -45,10 +45,31 @@ function getScanRoots() {
 }
 
 /**
- * Returns OS temp/cache directories to scan. Only returns paths that exist.
+ * Drops duplicate roots and roots nested inside another root in the list.
+ * os.tmpdir() is usually the same folder as an explicit entry (AppData\Local\Temp
+ * on Windows, /tmp on Linux); walking both would list every file twice.
+ * @param {string[]} roots
+ * @returns {string[]}
+ */
+function collapseRoots(roots) {
+  const resolved = [];
+  for (const r of roots) {
+    const abs = path.resolve(r);
+    if (!resolved.some(x => x.toLowerCase() === abs.toLowerCase())) resolved.push(abs);
+  }
+  return resolved.filter(r => !resolved.some(other => other !== r && isInsidePath(r, other)));
+}
+
+/**
+ * Returns OS temp/cache directories to scan. Only returns paths that exist,
+ * with duplicates and nested roots collapsed.
  * @returns {string[]}
  */
 function getTempPaths() {
+  return collapseRoots(getRawTempPaths());
+}
+
+function getRawTempPaths() {
   if (PLATFORM === 'win32') {
     return [
       os.tmpdir(),
@@ -172,6 +193,8 @@ module.exports = {
   getTempPaths,
   getExcludedPaths,
   isProtectedPath,
+  isInsidePath,
+  collapseRoots,
   getSystemRoot,
   getDownloadsPath,
 };
