@@ -2,8 +2,18 @@
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { ANSI_RE } = require('../src/tui/tokens');
+const { resolveAction, ANSI_RE } = require('../src/tui/tokens');
 const { Screen } = require('../src/tui/screen');
+
+// ── resolveAction ─────────────────────────────────────────────
+
+test('resolveAction never turns Skip into a delete', () => {
+  assert.equal(resolveAction('Skip', false), null);
+  assert.equal(resolveAction('Skip', true), null);
+  assert.equal(resolveAction('Delete', false), 'delete');
+  assert.equal(resolveAction('Move', true), 'move');
+  assert.equal(resolveAction('Move', false), 'delete');
+});
 
 // ── renderReview ──────────────────────────────────────────────
 
