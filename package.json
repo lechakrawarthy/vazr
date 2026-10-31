@@ -34,7 +34,7 @@
   },
   "scripts": {
     "start": "node ./bin/vazr.js",
-    "test": "node --test test/config.test.js test/validators.test.js test/scanner.test.js test/executor.test.js test/platform.test.js test/update-check.test.js test/tui.test.js"
+    "test": "node --test test/config.test.js test/validators.test.js test/scanner.test.js test/executor.test.js test/platform.test.js test/update-check.test.js test/tui.test.js test/plan.test.js"
   },
   "bin": {
     "vazr": "bin/vazr.js"

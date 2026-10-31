@@ -1,18 +1,10 @@
 'use strict';
 
 const readline = require('readline');
-const { ESC, tok, resolveAction } = require('./tokens');
+const { ESC, tok } = require('./tokens');
 const { enableRaw, disableRaw, nextKey } = require('./input');
+const { buildPlan, defaultSelection } = require('../plan');
 
-/**
- * Run the interactive review screen. Returns selected keys + action map, or
- * null if the user cancelled.
- * @param {import('./screen').Screen} screen
- * @param {string} version
- * @param {Array<object>} categories
- * @param {{ dryRun: boolean, forceDelete: boolean, destAvailable: boolean }} flags
- * @returns {Promise<{ selectedKeys: string[], actionMap: object } | null>}
- */
 function sortCategories(categories, sortBy) {
   const arr = [...categories];
   if (sortBy === 'name') return arr.sort((a, b) => a.label.localeCompare(b.label));
@@ -21,6 +13,15 @@ function sortCategories(categories, sortBy) {
   return arr.sort((a, b) => b.size - a.size);
 }
 
+/**
+ * Run the interactive review screen. Resolves to the confirmed plan, or null if
+ * the user cancelled.
+ * @param {import('./screen').Screen} screen
+ * @param {string} version
+ * @param {Array<object>} categories
+ * @param {{ dryRun: boolean, forceDelete: boolean, destAvailable: boolean, sortBy?: string }} flags
+ * @returns {Promise<ReturnType<typeof buildPlan> | null>}
+ */
 async function runReview(screen, version, categories, flags) {
   const visible = categories.filter(c => c.count > 0);
   if (visible.length === 0) return null;
@@ -31,9 +32,8 @@ async function runReview(screen, version, categories, flags) {
   const SORT_MODES = ['size', 'name', 'count'];
 
   let cursorIdx = 0;
-  const checked = new Set(
-    sorted.filter(c => c.defaultChecked !== false).map(c => c.key)
-  );
+  const checked = defaultSelection(sorted);
+  const excluded = new Map();
 
   process.stdout.write(ESC.altOn + ESC.hideCursor);
   enableRaw();
@@ -43,11 +43,7 @@ async function runReview(screen, version, categories, flags) {
     screen.flush();
   };
 
-  // Checked categories that resolve to a real action; checked "Skip" rows drop out.
-  const buildPlan = () => sorted
-    .filter(c => checked.has(c.key))
-    .map(c => ({ key: c.key, label: c.label, size: c.size, action: resolveAction(c.defaultAction, flags.destAvailable) }))
-    .filter(p => p.action);
+  const currentPlan = () => buildPlan(sorted, checked, excluded, flags.destAvailable);
 
   render();
 
@@ -83,15 +79,14 @@ async function runReview(screen, version, categories, flags) {
       cursorIdx = focusKey ? Math.max(0, sorted.findIndex(c => c.key === focusKey)) : 0;
     }
     else if (key === '\r' || key === '\n') {
-      if (buildPlan().length === 0) continue;
+      if (currentPlan().length === 0) continue;
       break;
     }
 
     render();
   }
 
-  const plan = buildPlan();
-  const selectedKeys = plan.map(p => p.key);
+  const plan = currentPlan();
 
   // Confirm screen
   screen.renderConfirm(version, plan);
@@ -107,11 +102,7 @@ async function runReview(screen, version, categories, flags) {
   disableRaw();
   process.stdout.write(ESC.altOff + ESC.showCursor);
 
-  if (!confirmed) return null;
-
-  const actionMap = {};
-  for (const item of plan) actionMap[item.key] = item.action;
-  return { selectedKeys, actionMap };
+  return confirmed ? plan : null;
 }
 
 /**

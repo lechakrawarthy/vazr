@@ -5,7 +5,7 @@ const path = require('path');
 const chalk = require('chalk');
 const inquirer = require('inquirer');
 const scanner = require('./scanner');
-const executor = require('./executor');
+const { runPlan } = require('./plan');
 const { createLogger } = require('./logger');
 const { exportResults } = require('./exporter');
 const { checkForUpdate } = require('./update-check');
@@ -345,21 +345,13 @@ async function run(options = {}) {
   // ── REVIEW ────────────────────────────────────────────────────
   // runReview handles its own alt-screen + raw mode lifecycle
 
-  const reviewResult = await runReview(screen, version, visibleCategories, { ...flags, sortBy });
+  const plan = await runReview(screen, version, visibleCategories, { ...flags, sortBy });
 
-  if (!reviewResult) {
+  if (!plan) {
     console.log('\n  ' + tok.muted('Cancelled. Nothing was changed.\n'));
     logger.info('cleanup_cancelled_by_user');
     return;
   }
-
-  const { selectedKeys, actionMap } = reviewResult;
-  const plan = selectedKeys
-    .filter(k => actionMap[k])
-    .map(k => {
-      const cat = visibleCategories.find(c => c.key === k);
-      return { key: k, label: cat.label, size: cat.size, action: actionMap[k] };
-    });
 
   if (plan.length === 0) {
     console.log('\n  ' + tok.muted('Nothing to do. Exiting.\n'));
@@ -380,51 +372,22 @@ async function run(options = {}) {
   // ── EXECUTE ───────────────────────────────────────────────────
   process.stdout.write(ESC.altOn + ESC.hideCursor);
 
-  let totalDone = 0, totalSkipped = 0, totalMoved = 0;
-
-  for (const planItem of plan) {
-    const cat = visibleCategories.find(c => c.key === planItem.key);
-    const action = planItem.action;
-    const items = cat.items;
-    if (items.length === 0) continue;
-
-    const catDest = action === 'move'
-      ? (planItem.key === 'downloads' ? path.join(destRoot, 'Downloads')
-        : planItem.key === 'media' ? path.join(destRoot, 'Media')
-          : path.join(destRoot, 'LargeFiles'))
-      : null;
-
-    const result = await executor.execute(items, action, cat.isDir, {
-      destRoot: catDest,
-      dryRun,
-      forceDelete,
-      logger,
-      onItem: ({ done, skipped }) => {
-        screen.renderExecute(version, cat.label, action, done + skipped, items.length);
-        screen.tick();
-      },
-    });
-
-    // Final progress flush for this category
-    screen.renderExecute(version, cat.label, action, items.length, items.length);
-    screen.flush();
-
-    if (action === 'move') totalMoved += result.done;
-    totalDone += result.done;
-    totalSkipped += result.skipped;
-
-    logger.info('category_processed', {
-      category: cat.key,
-      action,
-      processed: result.done,
-      skipped: result.skipped,
-    });
-  }
+  const totals = await runPlan(plan, {
+    destRoot,
+    dryRun,
+    forceDelete,
+    logger,
+    onProgress: (label, action, done, total) => {
+      screen.renderExecute(version, label, action, done, total);
+      if (done === total) screen.flush();
+      else screen.tick();
+    },
+  });
 
   // ── DONE ──────────────────────────────────────────────────────
   screen.renderDone(
     version,
-    { done: totalDone, skipped: totalSkipped, moved: totalMoved, scanned: foundCount, scanDurationMs },
+    { ...totals, scanned: foundCount, scanDurationMs },
     destRoot,
     dryRun
   );
@@ -438,9 +401,9 @@ async function run(options = {}) {
   process.stdout.write(ESC.altOff + ESC.showCursor);
 
   logger.info('cleanup_completed', {
-    processed: totalDone,
-    skipped: totalSkipped,
-    moved: totalMoved,
+    processed: totals.done,
+    skipped: totals.skipped,
+    moved: totals.moved,
     dryRun,
   });
 
