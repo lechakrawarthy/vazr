@@ -14,6 +14,60 @@ function sortCategories(categories, sortBy) {
 }
 
 /**
+ * A category as the review list should show it once some of its items have been
+ * left out: size, count, and items cover only what is still selected.
+ * @param {object} cat
+ * @param {Set<string> | undefined} skip - paths left out
+ * @returns {object}
+ */
+function withSelection(cat, skip) {
+  if (!skip || skip.size === 0) return cat;
+  const kept = cat.items.filter(i => !skip.has(i.path));
+  return {
+    ...cat,
+    label: `${cat.label} (${kept.length}/${cat.items.length})`,
+    count: kept.length,
+    size: kept.reduce((s, i) => s + (i.size || 0), 0),
+    items: kept,
+  };
+}
+
+/**
+ * Item-by-item picker for one category. Edits `skip` (paths left out) in place and
+ * keeps the category's checkbox in step: checked while anything is selected.
+ * Returns when the user goes back (←, Esc, q, Enter).
+ */
+async function pickItems(screen, version, cat, skip, checked) {
+  const items = [...cat.items].sort((a, b) => (b.size || 0) - (a.size || 0));
+  let cursor = 0;
+  const sync = () => {
+    if (skip.size < items.length) checked.add(cat.key);
+    else checked.delete(cat.key);
+  };
+
+  while (true) {
+    screen.renderItems(version, cat, items, cursor, skip);
+    screen.flush();
+    const key = await nextKey();
+
+    if (key === '\u001b[A' || key === 'k') cursor = Math.max(0, cursor - 1);
+    else if (key === '\u001b[B' || key === 'j') cursor = Math.min(items.length - 1, cursor + 1);
+    else if (key === '\u001b[5~') cursor = Math.max(0, cursor - 10);
+    else if (key === '\u001b[6~') cursor = Math.min(items.length - 1, cursor + 10);
+    else if (key === ' ') {
+      const p = items[cursor].path;
+      if (skip.has(p)) skip.delete(p); else skip.add(p);
+      sync();
+    }
+    else if (key === 'a' || key === 'A') {
+      if (skip.size === 0) items.forEach(i => skip.add(i.path)); else skip.clear();
+      sync();
+    }
+    else if (['\u001b[D', 'h', '\u001b', 'q', 'Q', '\r', '\n', '\u0003'].includes(key)) return;
+  }
+}
+
+/**
  * Run the interactive review screen. Resolves to the confirmed plan, or null if
  * the user cancelled.
  * @param {import('./screen').Screen} screen
@@ -39,7 +93,8 @@ async function runReview(screen, version, categories, flags) {
   enableRaw();
 
   const render = () => {
-    screen.renderReview(version, sorted, cursorIdx, checked, { ...flags, currentSort });
+    const shown = sorted.map(c => withSelection(c, excluded.get(c.key)));
+    screen.renderReview(version, shown, cursorIdx, checked, { ...flags, currentSort });
     screen.flush();
   };
 
@@ -62,6 +117,11 @@ async function runReview(screen, version, categories, flags) {
       const cat = sorted[cursorIdx];
       if (checked.has(cat.key)) checked.delete(cat.key);
       else checked.add(cat.key);
+    }
+    else if (key === '\u001b[C' || key === 'l' || key === '\t') {
+      const cat = sorted[cursorIdx];
+      if (!excluded.has(cat.key)) excluded.set(cat.key, new Set());
+      await pickItems(screen, version, cat, excluded.get(cat.key), checked);
     }
     else if (key === 'd' || key === 'D') {
       sorted[cursorIdx].defaultAction = 'Delete';
@@ -124,4 +184,4 @@ async function confirmForceDelete(screen, version) {
   return answer.trim() === 'DELETE';
 }
 
-module.exports = { runReview, confirmForceDelete };
+module.exports = { runReview, confirmForceDelete, withSelection };
