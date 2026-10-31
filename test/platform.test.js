@@ -113,3 +113,11 @@ test('getTempPaths never lists the same folder twice', () => {
   const lower = getTempPaths().map(p => p.toLowerCase());
   assert.equal(new Set(lower).size, lower.length);
 });
+
+test('checkRemovable refuses roots, home, and scan roots but allows a temp file', () => {
+  const { checkRemovable } = require('../src/platform');
+  assert.equal(checkRemovable(getSystemRoot()).ok, false);
+  assert.equal(checkRemovable(os.homedir()).ok, false);
+  assert.equal(checkRemovable(getDownloadsPath()).ok, false);
+  assert.equal(checkRemovable(path.join(os.tmpdir(), 'vazr-some-file.tmp')).ok, true);
+});

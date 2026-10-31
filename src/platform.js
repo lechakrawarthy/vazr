@@ -153,6 +153,39 @@ function isProtectedPath(targetPath) {
 }
 
 /**
+ * Last-line check before any delete or move. Refuses filesystem roots, the home
+ * directory, the scan/temp/Downloads roots themselves, and anything inside a
+ * protected system directory, except paths under a known temp root (C:\Windows\Temp
+ * and ~/Library/Caches live inside protected trees but are fair game).
+ * Roots are looked up once per checker (they hit the filesystem), so build one per
+ * batch with makeRemovableCheck() rather than calling checkRemovable() per item.
+ * @returns {(targetPath: string) => { ok: boolean, reason?: string }}
+ */
+function makeRemovableCheck() {
+  const temps = getTempPaths();
+  const roots = new Set([HOME, ...getScanRoots(), ...temps, getDownloadsPath()].map(p => path.resolve(p).toLowerCase()));
+
+  return function checkOne(targetPath) {
+    const resolved = path.resolve(targetPath);
+    if (resolved === path.parse(resolved).root) return { ok: false, reason: 'refusing to touch a filesystem root' };
+    if (roots.has(resolved.toLowerCase())) return { ok: false, reason: 'refusing to touch the home folder or a scan root itself' };
+    if (isProtectedPath(resolved) && !temps.some(t => isInsidePath(resolved, t))) {
+      return { ok: false, reason: 'path is inside a protected system directory' };
+    }
+    return { ok: true };
+  };
+}
+
+/**
+ * One-off form of makeRemovableCheck().
+ * @param {string} targetPath
+ * @returns {{ ok: boolean, reason?: string }}
+ */
+function checkRemovable(targetPath) {
+  return makeRemovableCheck()(targetPath);
+}
+
+/**
  * Returns scan roots for large-file/media scans — project dirs + Downloads,
  * filtered to paths that exist and are not protected.
  * @returns {string[]}
@@ -195,6 +228,8 @@ module.exports = {
   isProtectedPath,
   isInsidePath,
   collapseRoots,
+  checkRemovable,
+  makeRemovableCheck,
   getSystemRoot,
   getDownloadsPath,
 };

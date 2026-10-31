@@ -4,6 +4,7 @@ const fs = require('fs');
 const path = require('path');
 const _trashModule = require('trash');
 const trash = _trashModule.default || _trashModule;
+const platform = require('./platform');
 
 function ensureDir(dirPath) {
   if (!fs.existsSync(dirPath)) fs.mkdirSync(dirPath, { recursive: true });
@@ -101,10 +102,16 @@ async function execute(items, action, isDir, opts = {}) {
   const { destRoot, dryRun = false, forceDelete = false, logger, onItem } = opts;
   let done = 0; let skipped = 0;
 
+  const checkRemovable = platform.makeRemovableCheck();
+
   for (const item of items) {
     let result;
+    const guard = checkRemovable(item.path);
 
-    if (dryRun) {
+    if (!guard.ok) {
+      // Checked even in dry-run so the preview reports exactly what a real run would do.
+      result = guard;
+    } else if (dryRun) {
       result = { ok: true, dryRun: true };
     } else if (action === 'delete') {
       // Default behavior is safe delete via OS recycle bin/trash.
