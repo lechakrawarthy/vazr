@@ -74,6 +74,22 @@ irrelevant directories.
 }
 ```
 
+## Plans (`src/plan.js`)
+
+`buildPlan(categories, checked, excluded, destAvailable)` turns a selection into
+the work to do: one step per category, with its resolved action and the items
+still selected (the item picker records left-out paths in `excluded`).
+`runPlan` executes the steps through the executor. The review screen, the
+unattended `--yes` mode, and the confirm screen all use these, so they can't
+disagree about what will happen.
+
+## History (`src/history.js`)
+
+Each real run records a journal in `~/.vazr/history/<id>.json`: every move
+(source and destination) and delete totals with the first 2,000 deleted paths.
+The newest 20 runs are kept. `vazr undo` moves files back and never overwrites
+something that appeared at the original path since.
+
 ## Execution (`src/executor.js`)
 
 Handles the actual file operations: moving and deleting.
