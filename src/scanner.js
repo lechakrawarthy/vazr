@@ -420,6 +420,7 @@ async function scanWorkspace(opts, onProgress) {
       if (entry.isSymbolicLink()) continue;
       const full = path.join(dir, entry.name);
       if (entry.isDirectory()) {
+        if (entry.name === '.git') continue;
         subtasks.push(matchArtifact(entry.name, full, siblings).then(match => {
           // An unproven node_modules is still installed packages: walking into it would
           // flag each package's own dist/ or build/ (they all carry a package.json).

@@ -325,3 +325,10 @@ test('scanWorkspace only flags a virtualenv that contains pyvenv.cfg', async () 
   assert.ok(flagged.includes(realVenv));
   assert.ok(!flagged.includes(fakeVenv));
 });
+
+test('scanWorkspace never descends into .git', async () => {
+  const dir = tmpDir();
+  const pack = writeFile(path.join(dir, 'repo', '.git', 'objects', 'pack'), 'pack-1.pack', 'x'.repeat(700));
+  const result = await scanDir(dir);
+  assert.ok(!result.large.files.some(f => f.path === pack), 'git pack files must never be offered for removal');
+});
