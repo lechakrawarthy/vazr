@@ -108,6 +108,10 @@ async function run(options = {}) {
     updateCheck = true,
   } = options;
 
+  if (!exportFormat && !(process.stdin.isTTY && process.stdout.isTTY)) {
+    throw new Error('vazr needs an interactive terminal. For scripts and CI, use --export json (or csv).');
+  }
+
   // Kicked off now, awaited (with its own internal timeout) right before exit —
   // never blocks the scan/review/execute flow.
   const updateCheckPromise = checkForUpdate({ enabled: updateCheck && !exportFormat });
