@@ -97,10 +97,12 @@ class Screen {
 
   // ── REVIEW frame ──────────────────────────────────────────────
   renderReview(_version, categories, cursorIdx, checked, flags) {
-    const sorted = [...categories].sort((a, b) => b.size - a.size);
+    // Rendered in the caller's order: cursorIdx indexes into this same array, so
+    // re-sorting here would highlight one row while Space toggles another.
+    const sorted = categories;
     const totalSize = sorted.reduce((s, c) => s + c.size, 0);
     const totalCount = sorted.reduce((s, c) => s + c.count, 0);
-    const maxSize = sorted.length > 0 ? sorted[0].size : 1;
+    const maxSize = Math.max(1, ...sorted.map(c => c.size));
 
     const toDel = sorted.filter(c => checked.has(c.key) && c.defaultAction === 'Delete').reduce((s, c) => s + c.size, 0);
     const toMov = sorted.filter(c => checked.has(c.key) && c.defaultAction === 'Move' && flags.destAvailable).reduce((s, c) => s + c.size, 0);
