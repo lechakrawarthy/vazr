@@ -490,6 +490,7 @@ async function scanWorkspace(opts, onProgress) {
                 oldDownloadFiles.push({ path: full, size: stat.size });
                 oldDownloadsTotalSize += stat.size;
                 report(`Scanning Downloads... ${oldDownloadFiles.length} old files`);
+                return; // one category per file, or its bytes get counted (and acted on) twice
               }
             }
             classifySizedFile(full, stat);

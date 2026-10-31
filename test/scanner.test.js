@@ -354,3 +354,17 @@ test('scanWorkspace records project activity from top-level files and the git in
   assert.ok(byProject[idle] < cutoff, 'idle project should look idle');
   assert.ok(byProject[busy] >= cutoff, 'recent git activity should mark the project active');
 });
+
+test('scanWorkspace puts an old, large download in exactly one category', async () => {
+  const downloadsDir = tmpDir();
+  const f = writeFile(downloadsDir, 'old-installer.iso', 'x'.repeat(700));
+  const old = new Date(Date.now() - 90 * 86400 * 1000);
+  fs.utimesSync(f, old, old);
+
+  await withScanRoots([], downloadsDir, async () => {
+    const opts = { ...LOOSE, oldDownloadsCutoffMs: Date.now() - 60 * 86400 * 1000 };
+    const result = await require('../src/scanner').scanWorkspace(opts, undefined);
+    const hits = [result.oldDownloads, result.media, result.large].filter(c => c.files.some(x => x.path === f));
+    assert.equal(hits.length, 1);
+  });
+});
