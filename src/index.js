@@ -226,22 +226,28 @@ async function run(options = {}) {
     screen.tick();
   };
 
-  const tempResult = await scanner.scanTempCache(onProgress);
+  // Only walk what the run can show: `--only caches` shouldn't cost a full-disk scan.
+  const wanted = keys => !scanCategories || keys.some(k => scanCategories.includes(k));
+  const noFiles = { files: [], totalSize: 0 };
+
+  const tempResult = wanted(['temp']) ? await scanner.scanTempCache(onProgress) : noFiles;
   foundCount += tempResult.files.length;
   scanBytesSoFar = tempResult.totalSize;
 
   // One combined walk replaces four overlapping ones (dev artifacts, media, large
   // files, and old downloads previously each re-walked the same project trees).
-  const workspaceResult = await scanner.scanWorkspace(
-    {
-      minMediaBytes: minMediaMB * 1024 * 1024,
-      minLargeBytes: minLargeMB * 1024 * 1024,
-      oldDownloadsCutoffMs: Date.now() - oldDays * 86400 * 1000,
-      excludePaths,
-    },
-    (text, bytes) => onProgress(text, tempResult.totalSize + bytes)
-  );
-  const cacheResult = await scanner.scanToolCaches(onProgress);
+  const workspaceResult = wanted(['downloads', 'media', 'devArt', 'devArtActive', 'catchAll'])
+    ? await scanner.scanWorkspace(
+      {
+        minMediaBytes: minMediaMB * 1024 * 1024,
+        minLargeBytes: minLargeMB * 1024 * 1024,
+        oldDownloadsCutoffMs: Date.now() - oldDays * 86400 * 1000,
+        excludePaths,
+      },
+      (text, bytes) => onProgress(text, tempResult.totalSize + bytes)
+    )
+    : { oldDownloads: noFiles, media: noFiles, large: noFiles, devArtifacts: { folders: [], totalSize: 0 } };
+  const cacheResult = wanted(['caches']) ? await scanner.scanToolCaches(onProgress) : { folders: [], totalSize: 0 };
 
   const dlResult = workspaceResult.oldDownloads;
   const mediaResult = workspaceResult.media;
