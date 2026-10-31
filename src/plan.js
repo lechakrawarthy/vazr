@@ -53,12 +53,12 @@ function buildPlan(categories, checked, excluded, destAvailable) {
 /**
  * Executes a plan category by category.
  * @param {ReturnType<typeof buildPlan>} plan
- * @param {{ destRoot?: string, dryRun?: boolean, forceDelete?: boolean, logger?: object,
+ * @param {{ destRoot?: string, dryRun?: boolean, forceDelete?: boolean, logger?: object, journal?: object,
  *           onProgress?: (label: string, action: string, done: number, total: number) => void }} opts
  * @returns {Promise<{ done: number, skipped: number, moved: number }>}
  */
 async function runPlan(plan, opts = {}) {
-  const { destRoot, dryRun = false, forceDelete = false, logger, onProgress } = opts;
+  const { destRoot, dryRun = false, forceDelete = false, logger, journal, onProgress } = opts;
   const totals = { done: 0, skipped: 0, moved: 0 };
 
   for (const step of plan) {
@@ -67,7 +67,10 @@ async function runPlan(plan, opts = {}) {
       dryRun,
       forceDelete,
       logger,
-      onItem: ({ done, skipped }) => { if (onProgress) onProgress(step.label, step.action, done + skipped, step.items.length); },
+      onItem: ({ item, result, done, skipped }) => {
+        if (journal) journal.record(item, step.action, result);
+        if (onProgress) onProgress(step.label, step.action, done + skipped, step.items.length);
+      },
     });
 
     if (step.action === 'move') totals.moved += result.done;

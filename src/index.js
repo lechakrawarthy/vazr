@@ -6,6 +6,7 @@ const chalk = require('chalk');
 const inquirer = require('inquirer');
 const scanner = require('./scanner');
 const { runPlan } = require('./plan');
+const history = require('./history');
 const { createLogger } = require('./logger');
 const { exportResults } = require('./exporter');
 const { checkForUpdate } = require('./update-check');
@@ -372,11 +373,13 @@ async function run(options = {}) {
   // ── EXECUTE ───────────────────────────────────────────────────
   process.stdout.write(ESC.altOn + ESC.hideCursor);
 
+  const journal = history.createJournal();
   const totals = await runPlan(plan, {
     destRoot,
     dryRun,
     forceDelete,
     logger,
+    journal,
     onProgress: (label, action, done, total) => {
       screen.renderExecute(version, label, action, done, total);
       if (done === total) screen.flush();
@@ -400,7 +403,20 @@ async function run(options = {}) {
 
   process.stdout.write(ESC.altOff + ESC.showCursor);
 
+  let runId = null;
+  if (!dryRun) {
+    try {
+      runId = history.saveRun(journal, { version, destRoot });
+    } catch (err) {
+      logger.warn('history_write_failed', { reason: err.message });
+    }
+  }
+  if (runId && totals.moved > 0) {
+    console.log('\n  ' + tok.muted('Changed your mind? ') + chalk.cyan('vazr undo') + tok.muted(' moves everything back.'));
+  }
+
   logger.info('cleanup_completed', {
+    runId,
     processed: totals.done,
     skipped: totals.skipped,
     moved: totals.moved,
