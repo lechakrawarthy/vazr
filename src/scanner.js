@@ -402,9 +402,25 @@ async function scanWorkspace(opts, onProgress) {
     }
   }
 
+  // A project's last activity is the newest mtime among its top-level files and its
+  // git index/HEAD (touched by commits, checkouts, and editors running `git status`).
+  // Memoized so several artifacts in one project cost one lookup.
+  const activityCache = new Map();
+  function projectActivity(projectDir, entries, gitDir) {
+    if (!activityCache.has(projectDir)) {
+      const files = entries.filter(e => e.isFile()).slice(0, 50).map(e => path.join(projectDir, e.name));
+      if (gitDir) files.push(path.join(gitDir, 'index'), path.join(gitDir, 'HEAD'));
+      activityCache.set(projectDir, Promise.all(
+        files.map(f => schedule(() => fsp.stat(f)).then(s => s.mtimeMs, () => 0))
+      ).then(times => Math.max(0, ...times)));
+    }
+    return activityCache.get(projectDir);
+  }
+
   // Walks a project root (Documents, Projects, repos, ...): detects dev-artifact
   // folders (and stops descending into them) plus media/large files elsewhere.
-  async function walkProjectRoot(dir, depth) {
+  // `gitDir` is the .git of the nearest enclosing repository, if any.
+  async function walkProjectRoot(dir, depth, gitDir = null) {
     if (depth > 6) return;
     if (isPathExcluded(dir)) { debugLog(`skipping excluded path: ${dir}`); return; }
     if (depth === 0) debugLog(`scanning project root: ${dir}`);
@@ -414,6 +430,7 @@ async function scanWorkspace(opts, onProgress) {
     } catch { return; }
 
     const siblings = new Set(entries.map(e => e.name));
+    if (siblings.has('.git')) gitDir = path.join(dir, '.git');
 
     const subtasks = [];
     for (const entry of entries) {
@@ -425,10 +442,10 @@ async function scanWorkspace(opts, onProgress) {
           // An unproven node_modules is still installed packages: walking into it would
           // flag each package's own dist/ or build/ (they all carry a package.json).
           if (!match && entry.name === 'node_modules') return;
-          if (!match) return walkProjectRoot(full, depth + 1);
+          if (!match) return walkProjectRoot(full, depth + 1, gitDir);
           if (isPathExcluded(full)) { debugLog(`skipping excluded path: ${full}`); return; }
-          return getDirSize(full).then(size => {
-            devFolders.push({ path: full, size, name: entry.name, ecosystem: match.ecosystem, project: dir });
+          return Promise.all([getDirSize(full), projectActivity(dir, entries, gitDir)]).then(([size, lastActivityMs]) => {
+            devFolders.push({ path: full, size, name: entry.name, ecosystem: match.ecosystem, project: dir, lastActivityMs });
             devTotalSize += size;
             debugLog(`dev artifact found: ${full} (${match.ecosystem}, ${size} bytes)`);
             report(`Scanning dev artifacts... ${devFolders.length} folders`);

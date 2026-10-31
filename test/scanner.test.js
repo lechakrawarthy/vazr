@@ -332,3 +332,25 @@ test('scanWorkspace never descends into .git', async () => {
   const result = await scanDir(dir);
   assert.ok(!result.large.files.some(f => f.path === pack), 'git pack files must never be offered for removal');
 });
+
+test('scanWorkspace records project activity from top-level files and the git index', async () => {
+  const dir = tmpDir();
+  const old = new Date(Date.now() - 200 * 86400 * 1000);
+
+  const idle = path.join(dir, 'idle');
+  writeFile(path.join(idle, 'node_modules'), 'x.js', 'x');
+  const idlePkg = writeFile(idle, 'package.json', '{}');
+  fs.utimesSync(idlePkg, old, old);
+
+  const busy = path.join(dir, 'busy');
+  writeFile(path.join(busy, 'node_modules'), 'x.js', 'x');
+  const busyPkg = writeFile(busy, 'package.json', '{}');
+  fs.utimesSync(busyPkg, old, old);
+  writeFile(path.join(busy, '.git'), 'index', 'fresh'); // e.g. a commit today
+
+  const folders = (await scanDir(dir)).devArtifacts.folders;
+  const byProject = Object.fromEntries(folders.map(f => [f.project, f.lastActivityMs]));
+  const cutoff = Date.now() - 30 * 86400 * 1000;
+  assert.ok(byProject[idle] < cutoff, 'idle project should look idle');
+  assert.ok(byProject[busy] >= cutoff, 'recent git activity should mark the project active');
+});
