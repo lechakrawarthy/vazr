@@ -151,3 +151,13 @@ test('execute refuses protected paths, even in dry-run', async () => {
   const result = await execute([{ path: target, size: 1 }], 'delete', true, { dryRun: true });
   assert.deepEqual(result, { done: 0, skipped: 1 });
 });
+
+test('execute reports how each item was handled and where a move landed', async () => {
+  const dir = tmpDir();
+  const dest = tmpDir();
+  const src = writeFile(dir, 'report.txt');
+  const seen = [];
+  await execute([{ path: src, size: 5 }], 'move', false, { destRoot: dest, onItem: ({ result }) => seen.push(result) });
+  assert.equal(seen[0].method, 'move');
+  assert.ok(seen[0].dest && fs.existsSync(seen[0].dest), 'result.dest should point at the moved file');
+});

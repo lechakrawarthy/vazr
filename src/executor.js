@@ -16,7 +16,7 @@ function ensureDir(dirPath) {
  * @param {string} src - Source path
  * @param {string} destRoot - Destination root directory
  * @param {boolean} isDir - Whether src is a directory
- * @returns {{ ok: boolean, reason?: string }}
+ * @returns {{ ok: boolean, dest?: string, reason?: string }}
  */
 function movePath(src, destRoot, isDir) {
   try {
@@ -42,7 +42,7 @@ function movePath(src, destRoot, isDir) {
         throw renameErr;
       }
     }
-    return { ok: true };
+    return { ok: true, dest };
   } catch (err) {
     return { ok: false, reason: err.message };
   }
@@ -116,13 +116,13 @@ async function execute(items, action, isDir, opts = {}) {
     } else if (action === 'delete') {
       // Default behavior is safe delete via OS recycle bin/trash.
       result = forceDelete
-        ? (isDir ? deleteDir(item.path) : deleteFile(item.path))
-        : await trashPath(item.path);
+        ? { ...(isDir ? deleteDir(item.path) : deleteFile(item.path)), method: 'permanent' }
+        : { ...(await trashPath(item.path)), method: 'trash' };
     } else if (action === 'move') {
       if (!destRoot) {
         result = { ok: false, reason: 'No destination drive set' };
       } else {
-        result = movePath(item.path, destRoot, isDir);
+        result = { ...movePath(item.path, destRoot, isDir), method: 'move' };
       }
     } else {
       result = { ok: false, reason: 'Unknown action: ' + action };
