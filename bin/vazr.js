@@ -137,7 +137,7 @@ profileCmd
     try {
       let json;
       if (file === '-') {
-        json = fs.readFileSync('/dev/stdin', 'utf8');
+        json = fs.readFileSync(0, 'utf8'); // fd 0 works on Windows; /dev/stdin does not
       } else {
         json = fs.readFileSync(file, 'utf8');
       }
