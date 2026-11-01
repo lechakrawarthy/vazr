@@ -5,7 +5,8 @@ const path = require('path');
 const chalk = require('chalk');
 const inquirer = require('inquirer');
 const scanner = require('./scanner');
-const executor = require('./executor');
+const { runPlan, buildPlan, defaultSelection } = require('./plan');
+const history = require('./history');
 const { createLogger } = require('./logger');
 const { exportResults } = require('./exporter');
 const { checkForUpdate } = require('./update-check');
@@ -89,6 +90,42 @@ async function resolveDestinationTarget(initialTarget) {
   };
 }
 
+/**
+ * --yes: no review screen, no prompts. Cleans the categories named with --only,
+ * or the ones vazr pre-selects within a --profile, prints what it did, and records
+ * the run so `vazr undo` works. Sets exit code 2 if any item could not be processed.
+ */
+async function runUnattended(categories, { destRoot, destAvailable, dryRun, logger, version, onlyKeys }) {
+  const selection = onlyKeys
+    ? new Set(categories.filter(c => c.count > 0 && onlyKeys.includes(c.key)).map(c => c.key))
+    : defaultSelection(categories);
+  const plan = buildPlan(categories, selection, new Map(), destAvailable);
+  const say = s => process.stdout.write(s + '\n');
+
+  for (const c of categories) {
+    if (selection.has(c.key) && !plan.some(p => p.key === c.key)) {
+      say(`skipping ${c.label}: it can only be moved, and no --target drive is available`);
+    }
+  }
+
+  if (plan.length === 0) {
+    say('vazr: nothing to clean.');
+    return;
+  }
+  for (const step of plan) {
+    say(`${dryRun ? 'would ' : ''}${step.action} ${step.items.length} item(s), ${fmtBytes(step.size)}  ${step.label}`);
+  }
+
+  const journal = history.createJournal();
+  const totals = await runPlan(plan, { destRoot, dryRun, forceDelete: false, logger, journal });
+  const runId = dryRun ? null : history.saveRun(journal, { version, destRoot, unattended: true });
+  const freed = plan.reduce((s, p) => s + p.size, 0);
+
+  say(`${dryRun ? 'dry run: ' : ''}${totals.done} done, ${totals.skipped} skipped, ~${fmtBytes(freed)}${runId ? '  (run ' + runId + ')' : ''}`);
+  logger.info('cleanup_completed', { processed: totals.done, skipped: totals.skipped, moved: totals.moved, dryRun, runId, unattended: true });
+  if (totals.skipped > 0) process.exitCode = 2;
+}
+
 async function run(options = {}) {
   const {
     dryRun = false,
@@ -107,22 +144,29 @@ async function run(options = {}) {
     excludePaths = [],
     updateCheck = true,
     staleDays = 30,
+    assumeYes = false,
+    onlyKeys = null,
   } = options;
 
-  if (!exportFormat && !(process.stdin.isTTY && process.stdout.isTTY)) {
-    throw new Error('vazr needs an interactive terminal. For scripts and CI, use --export json (or csv).');
+  // Export and --yes runs never draw the TUI or ask anything.
+  const headless = Boolean(exportFormat || assumeYes);
+
+  if (!headless && !(process.stdin.isTTY && process.stdout.isTTY)) {
+    throw new Error('vazr needs an interactive terminal. For scripts and CI, use --export json (or --yes with --only/--profile).');
   }
 
   // Kicked off now, awaited (with its own internal timeout) right before exit —
   // never blocks the scan/review/execute flow.
-  const updateCheckPromise = checkForUpdate({ enabled: updateCheck && !exportFormat });
+  const updateCheckPromise = checkForUpdate({ enabled: updateCheck && !headless });
 
   const logger = createLogger(logFile);
   // Export never moves anything, so it must not stop to ask about a destination:
   // the prompt would hang in CI and end up inside `--export json > report.json`.
   const destination = exportFormat
     ? { target: null, chosenMode: 'export' }
-    : await resolveDestinationTarget(target);
+    : assumeYes
+      ? { target: isDestinationAvailable(target) ? target : null, chosenMode: 'unattended' }
+      : await resolveDestinationTarget(target);
   const destRoot = destination.target;
   const destAvailable = isDestinationAvailable(destRoot);
   const flags = { dryRun, forceDelete, destAvailable };
@@ -144,7 +188,7 @@ async function run(options = {}) {
   // phase is active (scan, review, execute). Safe to call multiple times.
   let cleanupDone = false;
   const exitCleanup = () => {
-    if (cleanupDone || exportFormat) return;
+    if (cleanupDone || headless) return;
     cleanupDone = true;
     try { disableRaw(); } catch { /* ignore if not in raw mode */ }
     process.stdout.write(ESC.altOff + ESC.showCursor + '\n');
@@ -159,7 +203,7 @@ async function run(options = {}) {
   // ── SCAN ──────────────────────────────────────────────────────
   // In export mode stdout carries the report, so progress goes to stderr (and only
   // when someone is watching it).
-  if (!exportFormat) process.stdout.write(ESC.altOn + ESC.hideCursor);
+  if (!headless) process.stdout.write(ESC.altOn + ESC.hideCursor);
 
   const scanStartTime = Date.now();
   let scanText = 'Starting scan...';
@@ -170,7 +214,7 @@ async function run(options = {}) {
   const onProgress = (text, bytes) => {
     scanText = text;
     if (typeof bytes === 'number') scanBytesSoFar = bytes;
-    if (exportFormat) {
+    if (headless) {
       if (process.stderr.isTTY && Date.now() - lastStderrWrite >= 100) {
         lastStderrWrite = Date.now();
         const line = scanText + (scanBytesSoFar > 0 ? '  ~' + fmtBytes(scanBytesSoFar) : '');
@@ -182,21 +226,28 @@ async function run(options = {}) {
     screen.tick();
   };
 
-  const tempResult = await scanner.scanTempCache(onProgress);
+  // Only walk what the run can show: `--only caches` shouldn't cost a full-disk scan.
+  const wanted = keys => !scanCategories || keys.some(k => scanCategories.includes(k));
+  const noFiles = { files: [], totalSize: 0 };
+
+  const tempResult = wanted(['temp']) ? await scanner.scanTempCache(onProgress) : noFiles;
   foundCount += tempResult.files.length;
   scanBytesSoFar = tempResult.totalSize;
 
   // One combined walk replaces four overlapping ones (dev artifacts, media, large
   // files, and old downloads previously each re-walked the same project trees).
-  const workspaceResult = await scanner.scanWorkspace(
-    {
-      minMediaBytes: minMediaMB * 1024 * 1024,
-      minLargeBytes: minLargeMB * 1024 * 1024,
-      oldDownloadsCutoffMs: Date.now() - oldDays * 86400 * 1000,
-      excludePaths,
-    },
-    (text, bytes) => onProgress(text, tempResult.totalSize + bytes)
-  );
+  const workspaceResult = wanted(['downloads', 'media', 'devArt', 'devArtActive', 'catchAll'])
+    ? await scanner.scanWorkspace(
+      {
+        minMediaBytes: minMediaMB * 1024 * 1024,
+        minLargeBytes: minLargeMB * 1024 * 1024,
+        oldDownloadsCutoffMs: Date.now() - oldDays * 86400 * 1000,
+        excludePaths,
+      },
+      (text, bytes) => onProgress(text, tempResult.totalSize + bytes)
+    )
+    : { oldDownloads: noFiles, media: noFiles, large: noFiles, devArtifacts: { folders: [], totalSize: 0 } };
+  const cacheResult = wanted(['caches']) ? await scanner.scanToolCaches(onProgress) : { folders: [], totalSize: 0 };
 
   const dlResult = workspaceResult.oldDownloads;
   const mediaResult = workspaceResult.media;
@@ -211,9 +262,9 @@ async function run(options = {}) {
   const sumSize = list => list.reduce((s, f) => s + f.size, 0);
 
   foundCount += dlResult.files.length + mediaResult.files.length +
-    devResult.folders.length + largeResult.files.length;
+    devResult.folders.length + largeResult.files.length + cacheResult.folders.length;
 
-  if (exportFormat && process.stderr.isTTY) process.stderr.write('\r\x1b[K');
+  if (headless && process.stderr.isTTY) process.stderr.write('\r\x1b[K');
 
   const scanDurationMs = Date.now() - scanStartTime;
 
@@ -223,6 +274,7 @@ async function run(options = {}) {
     media: mediaResult.files.length,
     devArtifacts: devResult.folders ? devResult.folders.length : 0,
     large: largeResult.files.length,
+    toolCaches: cacheResult.folders.length,
   });
 
   // ── Build categories ───────────────────────────────────────────
@@ -280,6 +332,17 @@ async function run(options = {}) {
       defaultChecked: false,
     },
     {
+      // Never pre-selected: safe to clear, but each one means a slow re-download.
+      key: 'caches',
+      label: 'Tool Caches (npm, pip, cargo…)',
+      count: cacheResult.folders.length,
+      size: cacheResult.totalSize,
+      items: cacheResult.folders,
+      isDir: true,
+      defaultAction: 'Delete',
+      defaultChecked: false,
+    },
+    {
       key: 'catchAll',
       label: `Other Large Files (> ${minLargeMB} MB)`,
       count: largeResult.files.length,
@@ -315,6 +378,11 @@ async function run(options = {}) {
     return;
   }
 
+  // ── Unattended mode (--yes): clean exactly the pre-selection ───
+  if (assumeYes) {
+    return runUnattended(visibleCategories, { destRoot, destAvailable, dryRun, logger, version, onlyKeys });
+  }
+
   // All empty?
   if (visibleCategories.every(c => c.count === 0)) {
     process.stdout.write(ESC.altOff + ESC.showCursor);
@@ -345,21 +413,13 @@ async function run(options = {}) {
   // ── REVIEW ────────────────────────────────────────────────────
   // runReview handles its own alt-screen + raw mode lifecycle
 
-  const reviewResult = await runReview(screen, version, visibleCategories, { ...flags, sortBy });
+  const plan = await runReview(screen, version, visibleCategories, { ...flags, sortBy });
 
-  if (!reviewResult) {
+  if (!plan) {
     console.log('\n  ' + tok.muted('Cancelled. Nothing was changed.\n'));
     logger.info('cleanup_cancelled_by_user');
     return;
   }
-
-  const { selectedKeys, actionMap } = reviewResult;
-  const plan = selectedKeys
-    .filter(k => actionMap[k])
-    .map(k => {
-      const cat = visibleCategories.find(c => c.key === k);
-      return { key: k, label: cat.label, size: cat.size, action: actionMap[k] };
-    });
 
   if (plan.length === 0) {
     console.log('\n  ' + tok.muted('Nothing to do. Exiting.\n'));
@@ -380,51 +440,24 @@ async function run(options = {}) {
   // ── EXECUTE ───────────────────────────────────────────────────
   process.stdout.write(ESC.altOn + ESC.hideCursor);
 
-  let totalDone = 0, totalSkipped = 0, totalMoved = 0;
-
-  for (const planItem of plan) {
-    const cat = visibleCategories.find(c => c.key === planItem.key);
-    const action = planItem.action;
-    const items = cat.items;
-    if (items.length === 0) continue;
-
-    const catDest = action === 'move'
-      ? (planItem.key === 'downloads' ? path.join(destRoot, 'Downloads')
-        : planItem.key === 'media' ? path.join(destRoot, 'Media')
-          : path.join(destRoot, 'LargeFiles'))
-      : null;
-
-    const result = await executor.execute(items, action, cat.isDir, {
-      destRoot: catDest,
-      dryRun,
-      forceDelete,
-      logger,
-      onItem: ({ done, skipped }) => {
-        screen.renderExecute(version, cat.label, action, done + skipped, items.length);
-        screen.tick();
-      },
-    });
-
-    // Final progress flush for this category
-    screen.renderExecute(version, cat.label, action, items.length, items.length);
-    screen.flush();
-
-    if (action === 'move') totalMoved += result.done;
-    totalDone += result.done;
-    totalSkipped += result.skipped;
-
-    logger.info('category_processed', {
-      category: cat.key,
-      action,
-      processed: result.done,
-      skipped: result.skipped,
-    });
-  }
+  const journal = history.createJournal();
+  const totals = await runPlan(plan, {
+    destRoot,
+    dryRun,
+    forceDelete,
+    logger,
+    journal,
+    onProgress: (label, action, done, total) => {
+      screen.renderExecute(version, label, action, done, total);
+      if (done === total) screen.flush();
+      else screen.tick();
+    },
+  });
 
   // ── DONE ──────────────────────────────────────────────────────
   screen.renderDone(
     version,
-    { done: totalDone, skipped: totalSkipped, moved: totalMoved, scanned: foundCount, scanDurationMs },
+    { ...totals, scanned: foundCount, scanDurationMs },
     destRoot,
     dryRun
   );
@@ -437,10 +470,23 @@ async function run(options = {}) {
 
   process.stdout.write(ESC.altOff + ESC.showCursor);
 
+  let runId = null;
+  if (!dryRun) {
+    try {
+      runId = history.saveRun(journal, { version, destRoot });
+    } catch (err) {
+      logger.warn('history_write_failed', { reason: err.message });
+    }
+  }
+  if (runId && totals.moved > 0) {
+    console.log('\n  ' + tok.muted('Changed your mind? ') + chalk.cyan('vazr undo') + tok.muted(' moves everything back.'));
+  }
+
   logger.info('cleanup_completed', {
-    processed: totalDone,
-    skipped: totalSkipped,
-    moved: totalMoved,
+    runId,
+    processed: totals.done,
+    skipped: totals.skipped,
+    moved: totals.moved,
     dryRun,
   });
 

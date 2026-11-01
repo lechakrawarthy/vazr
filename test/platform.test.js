@@ -2,6 +2,7 @@
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
+const fs = require('fs');
 const path = require('path');
 const os = require('os');
 
@@ -120,4 +121,22 @@ test('checkRemovable refuses roots, home, and scan roots but allows a temp file'
   assert.equal(checkRemovable(os.homedir()).ok, false);
   assert.equal(checkRemovable(getDownloadsPath()).ok, false);
   assert.equal(checkRemovable(path.join(os.tmpdir(), 'vazr-some-file.tmp')).ok, true);
+});
+
+// ── tool caches ───────────────────────────────────────────────
+
+test('getToolCachePaths returns existing folders outside the temp roots', () => {
+  const { getToolCachePaths, getTempPaths } = require('../src/platform');
+  const temps = getTempPaths().map(t => t.toLowerCase());
+  for (const c of getToolCachePaths()) {
+    assert.ok(fs.existsSync(c.path), c.path + ' should exist');
+    assert.ok(!temps.some(t => c.path.toLowerCase().startsWith(t)), c.path + ' is already covered by the temp scan');
+  }
+});
+
+test('checkRemovable allows a tool cache folder itself', () => {
+  const platform = require('../src/platform');
+  for (const c of platform.getToolCachePaths()) {
+    assert.equal(platform.checkRemovable(c.path).ok, true, c.path);
+  }
 });

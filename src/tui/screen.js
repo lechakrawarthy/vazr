@@ -241,7 +241,7 @@ class Screen {
 
     const sortLabel = 'sort:' + (flags.currentSort || 'size');
     const binds = [
-      ['↑↓', 'nav'], ['Space', 'tog'], ['D', 'del'],
+      ['↑↓', 'nav'], ['Space', 'tog'], ['→', 'items'], ['D', 'del'],
       ['M', 'mov'], ['S', sortLabel], ['Enter', 'run'], ['Q', 'quit'],
     ];
     let bstrs = [];
@@ -252,6 +252,33 @@ class Screen {
       if (curLen + l + 3 < this.W) { bstrs.push(str); curLen += l + 3; }
     }
     this._footer(bstrs.join('   '));
+  }
+
+  // ── ITEMS frame (one category, item by item) ─────────────────
+  renderItems(_version, cat, items, cursorIdx, skip) {
+    const kept = items.filter(i => !skip.has(i.path));
+    const keptSize = kept.reduce((s, i) => s + (i.size || 0), 0);
+    const ml = tok.brand(' ' + cat.label) + tok.muted(`  ${fmtN(kept.length)} of ${fmtN(items.length)} selected`);
+    this._header(ml, tok.muted('SELECTED: ') + tok.brand(fmtBytes(keptSize)));
+
+    // Keep the cursor roughly centred once the list is taller than the screen.
+    const rows = Math.max(3, this.H - this._buf.length - 3);
+    const top = clamp(cursorIdx - Math.floor(rows / 2), 0, Math.max(0, items.length - rows));
+    const labelW = Math.max(10, this.W - 20);
+    for (let i = top; i < Math.min(items.length, top + rows); i++) {
+      const item = items[i];
+      const active = i === cursorIdx;
+      const off = skip.has(item.path);
+      const text = itemLabel(item);
+      const shown = text.length > labelW ? '…' + text.slice(-(labelW - 1)) : text;
+      const row = ' ' + (active ? tok.brand('▶') : ' ') + ' ' + (off ? tok.brandDim('·') : tok.brand('✓')) + ' ' +
+        lpad(fmtBytesC(item.size || 0), 10) + '  ' + (off ? tok.muted(shown) : tok.primary(shown));
+      this.push(active ? chalk.bgHex('#0a200a')(rpad(row, this.W)) : row);
+    }
+
+    this.blank(Math.max(0, this.H - this._buf.length - 2));
+    const binds = [['↑↓', 'nav'], ['Space', 'tog'], ['A', 'all/none'], ['←', 'back']];
+    this._footer(binds.map(([k, d]) => chalk.bgHex('#1a2a1a').green(' ' + k + ' ') + tok.muted(' ' + d)).join('   '));
   }
 
   // ── CONFIRM frame ────────────────────────────────────────────
@@ -334,4 +361,16 @@ class Screen {
 // Helper used by fmtPct inside renderReview (pulled from tokens)
 const { fmtPct } = require('./tokens');
 
-module.exports = { Screen };
+/**
+ * One line describing an item in the item picker. Dev artifacts and tool caches
+ * also say what they are and, for projects, how long they have been idle.
+ * @param {{ path: string, ecosystem?: string, lastActivityMs?: number }} item
+ * @returns {string}
+ */
+function itemLabel(item) {
+  if (!item.ecosystem) return item.path;
+  const idleDays = item.lastActivityMs ? Math.floor((Date.now() - item.lastActivityMs) / 86400000) : null;
+  return item.path + '  ' + item.ecosystem + (idleDays !== null ? ' · idle ' + idleDays + 'd' : '');
+}
+
+module.exports = { Screen, itemLabel };

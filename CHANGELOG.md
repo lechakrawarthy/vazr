@@ -5,6 +5,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.6.0] — Unreleased
+
+The precision release: choose exactly what goes, and take it back if you were wrong.
+
+### Added
+- **Item picker.** `→` (or `Tab`) on a category lists its items largest-first; `Space` toggles one, `A` all or none, `←` goes back. The category row then shows only what is still selected, e.g. `Temp & Cache (12/40)`, and only those items are processed
+- **Undo.** Every real run is journaled to `~/.vazr/history` (newest 20 kept). `vazr undo [id]` moves files back where they came from, never overwriting anything new at the original path, and says where deleted items went. `vazr history` lists runs
+- **Tool Caches category:** npm, pnpm store, Yarn, pip, Go build cache, Cargo registry and sources, Gradle, NuGet, Playwright and Puppeteer browsers, Xcode DerivedData. Never pre-selected. `~/.m2` and `~/go/pkg/mod` are deliberately left alone
+- **Unattended runs:** `--yes` with `--only <keys>` or `--profile` cleans without the TUI or prompts, records the run for undo, and exits 2 if anything failed. It refuses `--force-delete`
+
+### Changed
+- `--only` and profiles now skip scans the selected categories don't need: `--only caches` went from 7m48s to 15s on a real machine
+- Plans are built and run in one place (`src/plan.js`), shared by the review screen and `--yes`
+
 ## [1.5.0] — Unreleased
 
 The trust release: vazr should never offer to delete something it can't justify.

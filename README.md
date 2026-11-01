@@ -83,6 +83,13 @@ vazr
 - **Last-line safety check** - every delete/move refuses filesystem roots, your home folder, scan roots, and system directories, even in a dry run
 - **Script-safe `--export`** - never prompts, and stdout is only the report, so `vazr --export json > report.json` works in CI and pipes
 
+### v1.6 - The Precision Update
+- **Pick individual items** - press `→` on any category to see its items largest-first and toggle them one by one; dev artifacts show their ecosystem and how long the project has been idle
+- **Undo** - every run is journaled to `~/.vazr/history`. `vazr undo` moves files back where they came from (and tells you where deleted items went); `vazr history` lists recent runs
+- **Tool caches** - npm, pnpm, Yarn, pip, Cargo, Gradle, NuGet, Go, Playwright/Puppeteer browsers, Xcode DerivedData, sized and listed in their own category (never pre-selected)
+- **Unattended runs** - `vazr --only temp,devArt --yes` cleans without the TUI for cron/Task Scheduler; it needs `--only` or `--profile`, refuses `--force-delete`, and exits 2 if anything failed
+- **Faster focused runs** - `--only` and profiles skip the scans they don't need (`--only caches`: 7m48s → 15s on a real machine)
+
 ---
 
 ## Common Workflows
@@ -101,6 +108,9 @@ vazr
 | Sort by name in TUI | `vazr --sort name` |
 | Skip a path entirely | `vazr --exclude "D:\Backups,E:\Media"` |
 | See exactly what's being scanned | `vazr --verbose` |
+| Clean only some categories, no TUI | `vazr --only temp,devArt --yes` |
+| Weekly unattended cleanup | `vazr --profile minimal --yes` (cron / Task Scheduler) |
+| Put back what the last run moved | `vazr undo` |
 
 ---
 
@@ -124,6 +134,9 @@ Options:
   --profile <name>           Apply a named profile (built-in or user-defined)
   --exclude <paths>          Comma-separated paths to skip while scanning (repeatable)
   --verbose                  Print detailed scan activity to stderr
+  --only <keys>              Only these categories: temp, downloads, media, devArt,
+                             devArtActive, caches, catchAll
+  -y, --yes                  Unattended: clean without the TUI (needs --only or --profile)
   --export [format]          Output results as json or csv, skip TUI (default: json)
   --export-output <path>     Write export to file instead of stdout
   --no-update-check          Skip checking npm for a newer version on startup
@@ -136,6 +149,8 @@ Commands:
   profile export <name>      Print a profile as JSON (pipe to share)
   profile import <file>      Import a profile from a JSON file (use - for stdin)
   profile delete <name>      Delete a user-defined profile
+  history                    List recent cleanup runs
+  undo [id]                  Move files from the last run (or run <id>) back
 ```
 
 ### TUI keyboard controls
@@ -144,6 +159,7 @@ Commands:
 |---|---|
 | `↑` / `↓` | Navigate categories |
 | `Space` | Toggle category on/off |
+| `→` / `Tab` | Open the category and pick individual items (`Space` toggles, `A` all/none, `←` back) |
 | `D` | Set action to Delete |
 | `M` | Set action to Move (requires `--target`) |
 | `S` | Cycle sort mode (size → name → count) |
@@ -161,6 +177,7 @@ Commands:
 | Large Media | mp4, mkv, iso, avi, mov… above size threshold | Move to drive |
 | Dev Artifacts — idle | node_modules, target, build, .venv, bin/obj… in projects idle 30d+ (only when a project marker proves it) | Delete (pre-selected) |
 | Dev Artifacts — active | the same, in projects touched recently | Delete (not pre-selected) |
+| Tool Caches | npm, pnpm, Yarn, pip, Cargo, Gradle, NuGet, Go, Playwright, Xcode DerivedData | Delete (not pre-selected) |
 | Other Large Files | Catch-all for large files not caught above | Move to drive |
 
 ---
@@ -291,6 +308,7 @@ Config search order (highest priority first):
 ## Safety Model
 
 - **Default deletes go to Trash/Recycle Bin** - you can recover mistakes
+- **`vazr undo`** - moves files from the last run back to where they were; never overwrites anything new at the original path
 - **`--force-delete`** bypasses the Trash and requires typing `DELETE` at a confirmation prompt
 - **Protected paths** - system directories are never touched regardless of what's in them
 - **`--dry-run`** - zero side effects; scans and shows results, does nothing

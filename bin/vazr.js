@@ -14,6 +14,8 @@ const {
   assertTargetPathSafe,
 } = require('../src/validators');
 const profiles = require('../src/profiles');
+const history = require('../src/history');
+const { CATEGORY_KEYS } = require('../src/plan');
 
 const program = new Command();
 
@@ -47,6 +49,8 @@ program
     []
   )
   .option('--verbose', 'Print detailed scan activity (which paths are scanned/skipped) to stderr')
+  .option('--only <keys>', 'Only these categories (comma-separated): ' + CATEGORY_KEYS.join(', '))
+  .option('-y, --yes', 'Unattended: clean the pre-selected categories without the TUI (needs --only or --profile)')
   .option(
     '--export [format]',
     'Export scan results as json or csv without launching the TUI (default: json)',
@@ -65,6 +69,8 @@ Examples:
   $ vazr --profile minimal
   $ vazr --exclude "D:\\Backups,E:\\Media"
   $ vazr --verbose
+  $ vazr --only temp,devArt --yes
+  $ vazr --profile minimal --yes --dry-run
   $ vazr --export json > bloat-report.json
   $ vazr --export csv --export-output report.csv
   $ npx vazr --dry-run
@@ -164,11 +170,58 @@ profileCmd
     }
   });
 
+// ── history / undo ────────────────────────────────────────────────
+program
+  .command('history')
+  .description('List recent cleanup runs (newest first)')
+  .action(() => {
+    const { fmtBytes } = require('../src/tui/tokens');
+    const runs = history.listRuns();
+    if (runs.length === 0) {
+      console.log('\n  ' + chalk.dim('No cleanup runs recorded yet.') + '\n');
+      return;
+    }
+    console.log('\n  ' + chalk.green.bold('Recent runs') + '\n');
+    for (const r of runs) {
+      const what = [
+        r.moves.length ? `${r.moves.length} moved` : null,
+        r.deleted.count ? `${r.deleted.count} deleted (${fmtBytes(r.deleted.bytes)})` : null,
+      ].filter(Boolean).join(', ');
+      const state = r.undoneAt ? chalk.dim('  [undone]') : '';
+      console.log('  ' + chalk.yellow(r.id) + '  ' + what + state);
+    }
+    console.log('\n  ' + chalk.dim('Undo the newest with `vazr undo`, or a specific one with `vazr undo <id>`.') + '\n');
+  });
+
+program
+  .command('undo [id]')
+  .description('Move files from the last run (or run <id>) back to where they were')
+  .action((id) => {
+    try {
+      const run = history.loadRun(id);
+      const { restored, failed, deleted } = history.undoRun(run);
+      console.log('\n  ' + chalk.green('✓ Restored ') + chalk.yellow(restored) + ' moved item(s) from run ' + run.id);
+      for (const f of failed) console.log('  ' + chalk.red('✕ ') + f.path + chalk.dim('  (' + f.reason + ')'));
+      if (deleted.trashed > 0) {
+        console.log('  ' + chalk.dim(`${deleted.trashed} item(s) went to the Trash / Recycle Bin. Restore them from there.`));
+      }
+      if (deleted.permanent > 0) {
+        console.log('  ' + chalk.red(`${deleted.permanent} item(s) were permanently deleted and cannot be restored.`));
+      }
+      console.log();
+      if (failed.length > 0) process.exitCode = 1;
+    } catch (err) {
+      console.error(chalk.red('\n  ' + err.message + '\n'));
+      process.exit(1);
+    }
+  });
+
 program.parse(process.argv);
 
 // ── Only run if no subcommand was matched ─────────────────────────
 // Commander runs subcommand actions directly; if we reach here, run main scan.
-if (!process.argv.slice(2).some(a => a === 'profile')) {
+const SUBCOMMANDS = ['profile', 'history', 'undo'];
+if (!process.argv.slice(2).some(a => SUBCOMMANDS.includes(a))) {
   const opts = program.opts();
 
   if (opts.verbose) process.env.DEBUG = process.env.DEBUG || '1';
@@ -222,6 +275,27 @@ if (!process.argv.slice(2).some(a => a === 'profile')) {
       if (profile.oldDays && !opts.oldDays) runtimeOptions.oldDays = profile.oldDays;
       if (profile.staleDays && !opts.staleDays) runtimeOptions.staleDays = profile.staleDays;
       if (profile.scanCategories) runtimeOptions.scanCategories = profile.scanCategories;
+    }
+
+    // ── --only (wins over a profile's categories) ─────────────────
+    if (opts.only) {
+      const keys = opts.only.split(',').map(s => s.trim()).filter(Boolean);
+      const unknown = keys.filter(k => !CATEGORY_KEYS.includes(k));
+      if (unknown.length) throw new Error(`Unknown category for --only: ${unknown.join(', ')}. Known: ${CATEGORY_KEYS.join(', ')}`);
+      runtimeOptions.scanCategories = keys;
+      runtimeOptions.onlyKeys = keys;
+    }
+
+    // ── --yes (unattended) ────────────────────────────────────────
+    if (opts.yes) {
+      if (!opts.only && !opts.profile) {
+        throw new Error('--yes needs --only or --profile, so an unattended run only touches what you named.');
+      }
+      if (runtimeOptions.forceDelete) {
+        throw new Error('--yes cannot be combined with --force-delete: permanent deletes always need you to type DELETE.');
+      }
+      if (opts.export !== false) throw new Error('--yes and --export do different things; pick one.');
+      runtimeOptions.assumeYes = true;
     }
 
     // ── Export flag ───────────────────────────────────────────────

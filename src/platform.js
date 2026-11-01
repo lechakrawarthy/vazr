@@ -100,6 +100,51 @@ function getRawTempPaths() {
 }
 
 /**
+ * Package-manager and tool caches that are safe to delete because the tool
+ * re-downloads whatever it needs. Deliberately left out: ~/.m2 (holds your own
+ * `mvn install` artifacts) and ~/go/pkg/mod (read-only files). Only existing
+ * paths are returned, and ones inside a temp root are dropped because the temp
+ * scan already counts them.
+ * @returns {Array<{ name: string, path: string }>}
+ */
+function getToolCachePaths() {
+  const local = process.env.LOCALAPPDATA || path.join(HOME, 'AppData', 'Local');
+  const common = [
+    { name: 'Cargo registry', path: path.join(HOME, '.cargo', 'registry', 'cache') },
+    { name: 'Cargo sources', path: path.join(HOME, '.cargo', 'registry', 'src') },
+    { name: 'Gradle', path: path.join(HOME, '.gradle', 'caches') },
+    { name: 'NuGet', path: path.join(HOME, '.nuget', 'packages') },
+  ];
+  let specific;
+  if (PLATFORM === 'win32') {
+    specific = [
+      { name: 'npm', path: path.join(local, 'npm-cache') },
+      { name: 'pnpm store', path: path.join(local, 'pnpm', 'store') },
+      { name: 'Yarn', path: path.join(local, 'Yarn', 'Cache') },
+      { name: 'pip', path: path.join(local, 'pip', 'cache') },
+      { name: 'Go build', path: path.join(local, 'go-build') },
+      { name: 'Playwright browsers', path: path.join(local, 'ms-playwright') },
+      { name: 'Puppeteer browsers', path: path.join(HOME, '.cache', 'puppeteer') },
+    ];
+  } else if (PLATFORM === 'darwin') {
+    specific = [
+      { name: 'npm', path: path.join(HOME, '.npm', '_cacache') },
+      { name: 'pnpm store', path: path.join(HOME, 'Library', 'pnpm', 'store') },
+      { name: 'Xcode DerivedData', path: path.join(HOME, 'Library', 'Developer', 'Xcode', 'DerivedData') },
+      { name: 'Puppeteer browsers', path: path.join(HOME, '.cache', 'puppeteer') },
+    ];
+  } else {
+    specific = [
+      { name: 'pnpm store', path: path.join(HOME, '.local', 'share', 'pnpm', 'store') },
+    ];
+  }
+  const temps = getTempPaths();
+  return [...specific, ...common]
+    .filter(c => fs.existsSync(c.path))
+    .filter(c => !temps.some(t => isInsidePath(c.path, t)));
+}
+
+/**
  * Returns lowercase paths that should never be touched by any scan or operation.
  * @returns {string[]}
  */
@@ -162,8 +207,12 @@ function isProtectedPath(targetPath) {
  * @returns {(targetPath: string) => { ok: boolean, reason?: string }}
  */
 function makeRemovableCheck() {
-  const temps = getTempPaths();
-  const roots = new Set([HOME, ...getScanRoots(), ...temps, getDownloadsPath()].map(p => path.resolve(p).toLowerCase()));
+  const tempRoots = getTempPaths();
+  const roots = new Set([HOME, ...getScanRoots(), ...tempRoots, getDownloadsPath()].map(p => path.resolve(p).toLowerCase()));
+  // Fair game even inside a protected tree. Tool caches are listed too (Xcode's
+  // DerivedData lives in ~/Library), but unlike temp roots a cache folder is itself
+  // the item being removed, so it stays out of `roots`.
+  const temps = [...tempRoots, ...getToolCachePaths().map(c => c.path)];
 
   return function checkOne(targetPath) {
     const resolved = path.resolve(targetPath);
@@ -224,6 +273,7 @@ module.exports = {
   getScanRoots,
   getLargeScanRoots,
   getTempPaths,
+  getToolCachePaths,
   getExcludedPaths,
   isProtectedPath,
   isInsidePath,
