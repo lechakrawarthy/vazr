@@ -21,6 +21,11 @@ function toJSON(categories, meta) {
       items: (c.items || []).map(item => ({
         path: item.path,
         sizeBytes: item.size || 0,
+        ...(item.ecosystem && {
+          ecosystem: item.ecosystem,
+          project: item.project,
+          lastActivity: item.lastActivityMs ? new Date(item.lastActivityMs).toISOString() : null,
+        }),
       })),
     })),
   };

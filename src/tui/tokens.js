@@ -83,16 +83,30 @@ function semanticBar(size, ratio, w) {
   return barColor('▓'.repeat(f)) + chalk.hex('#1a2a1a')('░'.repeat(w - f));
 }
 
+/**
+ * What a category's action resolves to when the plan runs. The label, the
+ * delete/move totals, and the executed plan all go through this so they can't
+ * disagree (a "Skip" row used to render as "──────" yet execute as a delete).
+ * @param {string} action - 'Delete' | 'Move' | 'Skip'
+ * @param {boolean} destAvailable
+ * @returns {'delete' | 'move' | null}
+ */
+function resolveAction(action, destAvailable) {
+  if (action === 'Move') return destAvailable ? 'move' : 'delete';
+  if (action === 'Delete') return 'delete';
+  return null;
+}
+
 function actLabel(action, destAvailable) {
-  if (action === 'Delete') return tok.danger('[D] DELETE');
-  if (action === 'Move' && destAvailable) return tok.warn('[M] MOVE  ');
-  if (action === 'Move') return tok.muted('[D] DELETE'); // fallback
-  return tok.muted('──────');
+  const resolved = resolveAction(action, destAvailable);
+  if (resolved === 'delete') return tok.danger('[D] DELETE');
+  if (resolved === 'move') return tok.warn('[M] MOVE  ');
+  return tok.muted('SKIP (D/M)');
 }
 
 module.exports = {
   ESC, ANSI_RE, SPIN,
   vlen, rpad, lpad, clamp,
   tok, fmtBytes, fmtBytesC, fmtN, fmtPct,
-  semanticBar, actLabel,
+  semanticBar, actLabel, resolveAction,
 };

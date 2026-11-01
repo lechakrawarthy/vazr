@@ -145,3 +145,9 @@ test('execute calls onItem callback for each item', async () => {
   assert.equal(calls.length, 3);
   assert.equal(calls[2].done, 3);
 });
+
+test('execute refuses protected paths, even in dry-run', async () => {
+  const target = process.platform === 'win32' ? 'C:\\Windows\\System32\\drivers' : '/usr/bin';
+  const result = await execute([{ path: target, size: 1 }], 'delete', true, { dryRun: true });
+  assert.deepEqual(result, { done: 0, skipped: 1 });
+});

@@ -10,7 +10,7 @@ const { createLogger } = require('./logger');
 const { exportResults } = require('./exporter');
 const { checkForUpdate } = require('./update-check');
 const {
-  Screen, ESC, tok,
+  Screen, ESC, tok, fmtBytes,
   enableRaw, disableRaw, nextKey,
   runReview, confirmForceDelete,
 } = require('./tui');
@@ -106,14 +106,23 @@ async function run(options = {}) {
     scanCategories = null, // null = all; array of keys to include
     excludePaths = [],
     updateCheck = true,
+    staleDays = 30,
   } = options;
+
+  if (!exportFormat && !(process.stdin.isTTY && process.stdout.isTTY)) {
+    throw new Error('vazr needs an interactive terminal. For scripts and CI, use --export json (or csv).');
+  }
 
   // Kicked off now, awaited (with its own internal timeout) right before exit —
   // never blocks the scan/review/execute flow.
-  const updateCheckPromise = checkForUpdate({ enabled: updateCheck });
+  const updateCheckPromise = checkForUpdate({ enabled: updateCheck && !exportFormat });
 
   const logger = createLogger(logFile);
-  const destination = await resolveDestinationTarget(target);
+  // Export never moves anything, so it must not stop to ask about a destination:
+  // the prompt would hang in CI and end up inside `--export json > report.json`.
+  const destination = exportFormat
+    ? { target: null, chosenMode: 'export' }
+    : await resolveDestinationTarget(target);
   const destRoot = destination.target;
   const destAvailable = isDestinationAvailable(destRoot);
   const flags = { dryRun, forceDelete, destAvailable };
@@ -135,7 +144,7 @@ async function run(options = {}) {
   // phase is active (scan, review, execute). Safe to call multiple times.
   let cleanupDone = false;
   const exitCleanup = () => {
-    if (cleanupDone) return;
+    if (cleanupDone || exportFormat) return;
     cleanupDone = true;
     try { disableRaw(); } catch { /* ignore if not in raw mode */ }
     process.stdout.write(ESC.altOff + ESC.showCursor + '\n');
@@ -148,16 +157,27 @@ async function run(options = {}) {
   });
 
   // ── SCAN ──────────────────────────────────────────────────────
-  process.stdout.write(ESC.altOn + ESC.hideCursor);
+  // In export mode stdout carries the report, so progress goes to stderr (and only
+  // when someone is watching it).
+  if (!exportFormat) process.stdout.write(ESC.altOn + ESC.hideCursor);
 
   const scanStartTime = Date.now();
   let scanText = 'Starting scan...';
   let foundCount = 0;
   let scanBytesSoFar = 0;
+  let lastStderrWrite = 0;
 
   const onProgress = (text, bytes) => {
     scanText = text;
     if (typeof bytes === 'number') scanBytesSoFar = bytes;
+    if (exportFormat) {
+      if (process.stderr.isTTY && Date.now() - lastStderrWrite >= 100) {
+        lastStderrWrite = Date.now();
+        const line = scanText + (scanBytesSoFar > 0 ? '  ~' + fmtBytes(scanBytesSoFar) : '');
+        process.stderr.write('\r\x1b[K' + line.slice(0, (process.stderr.columns || 80) - 1));
+      }
+      return;
+    }
     screen.renderScan(version, scanText, foundCount, scanBytesSoFar);
     screen.tick();
   };
@@ -183,8 +203,17 @@ async function run(options = {}) {
   const devResult = workspaceResult.devArtifacts;
   const largeResult = workspaceResult.large;
 
+  // Artifacts of projects you are still working on are shown but never pre-selected:
+  // deleting node_modules in the repo you have open is the opposite of help.
+  const staleCutoffMs = Date.now() - staleDays * 86400 * 1000;
+  const staleDev = devResult.folders.filter(f => f.lastActivityMs < staleCutoffMs);
+  const activeDev = devResult.folders.filter(f => f.lastActivityMs >= staleCutoffMs);
+  const sumSize = list => list.reduce((s, f) => s + f.size, 0);
+
   foundCount += dlResult.files.length + mediaResult.files.length +
     devResult.folders.length + largeResult.files.length;
+
+  if (exportFormat && process.stderr.isTTY) process.stderr.write('\r\x1b[K');
 
   const scanDurationMs = Date.now() - scanStartTime;
 
@@ -230,13 +259,25 @@ async function run(options = {}) {
     },
     {
       key: 'devArt',
-      label: 'Dev Artifacts (node_modules…)',
-      count: devResult.folders ? devResult.folders.length : 0,
-      size: devResult.totalSize,
-      items: devResult.folders || [],
+      group: 'devArt',
+      label: `Dev Artifacts — idle ${staleDays}d+`,
+      count: staleDev.length,
+      size: sumSize(staleDev),
+      items: staleDev,
       isDir: true,
       defaultAction: 'Delete',
       defaultChecked: true,
+    },
+    {
+      key: 'devArtActive',
+      group: 'devArt',
+      label: 'Dev Artifacts — active projects',
+      count: activeDev.length,
+      size: sumSize(activeDev),
+      items: activeDev,
+      isDir: true,
+      defaultAction: 'Delete',
+      defaultChecked: false,
     },
     {
       key: 'catchAll',
@@ -255,13 +296,13 @@ async function run(options = {}) {
   }
 
   // ── Apply scanCategories filter (profile / CLI) ───────────────
+  // A profile asking for 'devArt' gets both the idle and the active split.
   const visibleCategories = scanCategories
-    ? categories.filter(c => scanCategories.includes(c.key))
+    ? categories.filter(c => scanCategories.includes(c.key) || (c.group && scanCategories.includes(c.group)))
     : categories;
 
   // ── Export mode (--export): skip TUI entirely ─────────────────
   if (exportFormat) {
-    process.stdout.write(ESC.altOff + ESC.showCursor);
     exportResults(visibleCategories, {
       version,
       dryRun,
@@ -269,6 +310,7 @@ async function run(options = {}) {
       minMediaMB,
       minLargeMB,
       oldDays,
+      staleDays,
     }, { format: exportFormat, outputPath: exportOutput || null });
     return;
   }
@@ -283,7 +325,6 @@ async function run(options = {}) {
   // ── Category summary before TUI ───────────────────────────────
   process.stdout.write(ESC.altOff + ESC.showCursor);
 
-  const { fmtBytes } = require('./tui/tokens');
   console.log('\n  ' + chalk.green.bold('Scan complete') + '  ' + chalk.dim('(' + (scanDurationMs / 1000).toFixed(1) + 's)'));
   console.log('  ' + chalk.dim('─'.repeat(54)));
 

@@ -5,6 +5,26 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.5.0] — Unreleased
+
+The trust release: vazr should never offer to delete something it can't justify.
+
+### Added
+- **Project-aware dev artifacts.** A folder is only flagged when its project proves what it is: `node_modules` needs a `package.json` beside it, `target/` needs `Cargo.toml`/`pom.xml`/`build.sbt`, `build/` needs a Node/Gradle/Flutter/CMake/Python project, `.venv` needs a `pyvenv.cfg` inside, and so on. A hand-made `Documents/build` or `Taxes/out` folder is no longer a candidate for deletion
+- New ecosystems: .NET (`bin/`, `obj/` beside a `*.csproj`), Python (`.venv`, `venv`, `.pytest_cache`, `.mypy_cache`, `.ruff_cache`, `.tox`), Angular, Dart/Flutter, Swift, Elixir, Haskell, Zig. Every artifact is tagged with its ecosystem in `--export` output
+- **Idle vs. active projects.** vazr reads each project's last activity (top-level files plus the git index/HEAD) and splits dev artifacts into *idle 30d+* (pre-selected) and *active projects* (shown, never pre-selected). `--stale-days <n>` (or `staleDays` in config/profiles) sets the threshold
+- Every delete and move now passes a last-line safety check: filesystem roots, the home folder, scan roots themselves, and protected system directories are refused, even if something upstream got it wrong. Dry runs report these refusals too
+
+### Fixed
+- `--export` asked an interactive destination question before scanning, so it crashed in CI and pipes, and in a terminal the prompt and the scan animation were written into `--export json > report.json`. Export now never prompts, and stdout carries only the report (progress goes to stderr when it's a terminal)
+- Temp files were listed and counted twice on Windows and Linux, because `os.tmpdir()` is the same folder as an explicit temp path
+- With sort set to `name` or `count`, the review screen highlighted one row while Space toggled a different one
+- A checked category shown as "──────" (no destination for a move) silently ran as a delete. It now shows `SKIP (D/M)` and is left alone unless you pick an action
+- An old download that was also large was put in two categories, inflating the total and acting on it twice
+- `.git` folders are no longer walked, so pack files can't show up as "Other Large Files" (and scans are faster)
+- `vazr profile import -` now reads stdin on Windows
+- Running the interactive mode without a terminal now explains what to do instead of hanging
+
 ## [1.4.0] — 2026-09-11
 
 ### Changed

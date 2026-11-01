@@ -9,11 +9,103 @@ function debugLog(msg) {
   if (process.env.DEBUG) console.error('[scanner] ' + msg);
 }
 
-const ARTIFACT_NAMES = new Set([
-  'node_modules', '.cache', 'dist', 'build', '.next', '.nuxt',
-  '__pycache__', '.gradle', 'target', '.parcel-cache', 'out',
-  '.turbo', '.svelte-kit', '.expo', 'vendor', 'Pods',
-]);
+// A folder name alone is not proof of a build artifact: `Documents/build` or
+// `Taxes/out` are often hand-made. Each rule says what has to be true before a
+// folder with that name is flagged:
+//   markers: a file beside the folder that identifies the project (`*.ext` = any file with that extension)
+//   inner:   a file inside the folder that identifies it
+//   neither: the name is unambiguous on its own
+const JS = ['package.json'];
+const GRADLE = ['build.gradle', 'build.gradle.kts', 'settings.gradle', 'settings.gradle.kts'];
+const DOTNET = ['*.csproj', '*.fsproj', '*.vbproj'];
+const ARTIFACT_RULES = {
+  node_modules: { markers: JS },
+  '.next': { markers: JS },
+  '.nuxt': { markers: JS },
+  '.svelte-kit': { markers: JS },
+  '.turbo': { markers: JS },
+  '.parcel-cache': { markers: JS },
+  '.expo': { markers: JS },
+  '.cache': { markers: JS },
+  '.angular': { markers: ['angular.json'] },
+  dist: { markers: [...JS, 'pyproject.toml', 'setup.py'] },
+  out: { markers: JS },
+  build: { markers: [...JS, ...GRADLE, 'pubspec.yaml', 'CMakeLists.txt', 'pyproject.toml', 'setup.py'] },
+  target: { markers: ['Cargo.toml', 'pom.xml', 'build.sbt'] },
+  '.gradle': { markers: GRADLE },
+  bin: { markers: DOTNET },
+  obj: { markers: DOTNET },
+  vendor: { markers: ['composer.json'] }, // Go vendor/ is usually committed, so it is deliberately not matched
+  Pods: { markers: ['Podfile'] },
+  '.dart_tool': { markers: ['pubspec.yaml'] },
+  '.build': { markers: ['Package.swift'] },
+  _build: { markers: ['mix.exs'] },
+  deps: { markers: ['mix.exs'] },
+  '.stack-work': { markers: ['stack.yaml'] },
+  '.zig-cache': { markers: ['build.zig'] },
+  '.venv': { inner: ['pyvenv.cfg'], ecosystem: 'Python' },
+  venv: { inner: ['pyvenv.cfg'], ecosystem: 'Python' },
+  __pycache__: { ecosystem: 'Python' },
+  '.pytest_cache': { ecosystem: 'Python' },
+  '.mypy_cache': { ecosystem: 'Python' },
+  '.ruff_cache': { ecosystem: 'Python' },
+  '.tox': { ecosystem: 'Python' },
+};
+
+const MARKER_ECOSYSTEMS = {
+  'package.json': 'Node', 'angular.json': 'Angular', 'pyproject.toml': 'Python', 'setup.py': 'Python',
+  'build.gradle': 'Gradle', 'build.gradle.kts': 'Gradle', 'settings.gradle': 'Gradle', 'settings.gradle.kts': 'Gradle',
+  'pubspec.yaml': 'Dart', 'CMakeLists.txt': 'CMake', 'Cargo.toml': 'Rust', 'pom.xml': 'Maven', 'build.sbt': 'Scala',
+  '*.csproj': '.NET', '*.fsproj': '.NET', '*.vbproj': '.NET', 'composer.json': 'PHP', 'Podfile': 'CocoaPods',
+  'Package.swift': 'Swift', 'mix.exs': 'Elixir', 'stack.yaml': 'Haskell', 'build.zig': 'Zig',
+};
+
+// Used only by the legacy single-purpose scanDevArtifacts below.
+const ARTIFACT_NAMES = new Set(Object.keys(ARTIFACT_RULES));
+
+/**
+ * Returns the first marker in `markers` present among `siblings`, or null.
+ * @param {string[]} markers
+ * @param {Set<string>} siblings - entry names in the folder's parent directory
+ * @returns {string | null}
+ */
+function findMarker(markers, siblings) {
+  for (const m of markers) {
+    if (m.startsWith('*')) {
+      const ext = m.slice(1);
+      for (const s of siblings) if (s.endsWith(ext)) return m;
+    } else if (siblings.has(m)) {
+      return m;
+    }
+  }
+  return null;
+}
+
+/**
+ * Decides whether `dir/name` is a genuine artifact folder.
+ * @param {string} name
+ * @param {string} full - absolute path of the candidate folder
+ * @param {Set<string>} siblings - entry names beside it
+ * @returns {Promise<{ ecosystem: string } | null>}
+ */
+async function matchArtifact(name, full, siblings) {
+  const rule = Object.prototype.hasOwnProperty.call(ARTIFACT_RULES, name) ? ARTIFACT_RULES[name] : null;
+  if (!rule) return null;
+  if (rule.markers) {
+    const marker = findMarker(rule.markers, siblings);
+    return marker ? { ecosystem: MARKER_ECOSYSTEMS[marker] || 'Build' } : null;
+  }
+  if (rule.inner) {
+    for (const f of rule.inner) {
+      try {
+        await schedule(() => fsp.access(path.join(full, f)));
+        return { ecosystem: rule.ecosystem };
+      } catch { /* try the next one */ }
+    }
+    return null;
+  }
+  return { ecosystem: rule.ecosystem };
+}
 
 const MEDIA_EXTENSIONS = new Set([
   '.mp4', '.mkv', '.avi', '.mov', '.wmv', '.flv',
@@ -310,9 +402,25 @@ async function scanWorkspace(opts, onProgress) {
     }
   }
 
+  // A project's last activity is the newest mtime among its top-level files and its
+  // git index/HEAD (touched by commits, checkouts, and editors running `git status`).
+  // Memoized so several artifacts in one project cost one lookup.
+  const activityCache = new Map();
+  function projectActivity(projectDir, entries, gitDir) {
+    if (!activityCache.has(projectDir)) {
+      const files = entries.filter(e => e.isFile()).slice(0, 50).map(e => path.join(projectDir, e.name));
+      if (gitDir) files.push(path.join(gitDir, 'index'), path.join(gitDir, 'HEAD'));
+      activityCache.set(projectDir, Promise.all(
+        files.map(f => schedule(() => fsp.stat(f)).then(s => s.mtimeMs, () => 0))
+      ).then(times => Math.max(0, ...times)));
+    }
+    return activityCache.get(projectDir);
+  }
+
   // Walks a project root (Documents, Projects, repos, ...): detects dev-artifact
   // folders (and stops descending into them) plus media/large files elsewhere.
-  async function walkProjectRoot(dir, depth) {
+  // `gitDir` is the .git of the nearest enclosing repository, if any.
+  async function walkProjectRoot(dir, depth, gitDir = null) {
     if (depth > 6) return;
     if (isPathExcluded(dir)) { debugLog(`skipping excluded path: ${dir}`); return; }
     if (depth === 0) debugLog(`scanning project root: ${dir}`);
@@ -321,24 +429,28 @@ async function scanWorkspace(opts, onProgress) {
       entries = await schedule(() => fsp.readdir(dir, { withFileTypes: true }));
     } catch { return; }
 
+    const siblings = new Set(entries.map(e => e.name));
+    if (siblings.has('.git')) gitDir = path.join(dir, '.git');
+
     const subtasks = [];
     for (const entry of entries) {
       if (entry.isSymbolicLink()) continue;
       const full = path.join(dir, entry.name);
       if (entry.isDirectory()) {
-        if (ARTIFACT_NAMES.has(entry.name)) {
-          if (isPathExcluded(full)) { debugLog(`skipping excluded path: ${full}`); continue; }
-          subtasks.push(
-            getDirSize(full).then(size => {
-              devFolders.push({ path: full, size, name: entry.name });
-              devTotalSize += size;
-              debugLog(`dev artifact found: ${full} (${size} bytes)`);
-              report(`Scanning dev artifacts... ${devFolders.length} folders`);
-            })
-          );
-        } else {
-          subtasks.push(walkProjectRoot(full, depth + 1));
-        }
+        if (entry.name === '.git') continue;
+        subtasks.push(matchArtifact(entry.name, full, siblings).then(match => {
+          // An unproven node_modules is still installed packages: walking into it would
+          // flag each package's own dist/ or build/ (they all carry a package.json).
+          if (!match && entry.name === 'node_modules') return;
+          if (!match) return walkProjectRoot(full, depth + 1, gitDir);
+          if (isPathExcluded(full)) { debugLog(`skipping excluded path: ${full}`); return; }
+          return Promise.all([getDirSize(full), projectActivity(dir, entries, gitDir)]).then(([size, lastActivityMs]) => {
+            devFolders.push({ path: full, size, name: entry.name, ecosystem: match.ecosystem, project: dir, lastActivityMs });
+            devTotalSize += size;
+            debugLog(`dev artifact found: ${full} (${match.ecosystem}, ${size} bytes)`);
+            report(`Scanning dev artifacts... ${devFolders.length} folders`);
+          });
+        }));
       } else if (entry.isFile()) {
         subtasks.push(
           schedule(() => fsp.stat(full)).then(stat => classifySizedFile(full, stat)).catch(err => {
@@ -378,6 +490,7 @@ async function scanWorkspace(opts, onProgress) {
                 oldDownloadFiles.push({ path: full, size: stat.size });
                 oldDownloadsTotalSize += stat.size;
                 report(`Scanning Downloads... ${oldDownloadFiles.length} old files`);
+                return; // one category per file, or its bytes get counted (and acted on) twice
               }
             }
             classifySizedFile(full, stat);

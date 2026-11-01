@@ -1,7 +1,7 @@
 'use strict';
 
 const readline = require('readline');
-const { ESC, tok } = require('./tokens');
+const { ESC, tok, resolveAction } = require('./tokens');
 const { enableRaw, disableRaw, nextKey } = require('./input');
 
 /**
@@ -43,6 +43,12 @@ async function runReview(screen, version, categories, flags) {
     screen.flush();
   };
 
+  // Checked categories that resolve to a real action; checked "Skip" rows drop out.
+  const buildPlan = () => sorted
+    .filter(c => checked.has(c.key))
+    .map(c => ({ key: c.key, label: c.label, size: c.size, action: resolveAction(c.defaultAction, flags.destAvailable) }))
+    .filter(p => p.action);
+
   render();
 
   while (true) {
@@ -77,20 +83,15 @@ async function runReview(screen, version, categories, flags) {
       cursorIdx = focusKey ? Math.max(0, sorted.findIndex(c => c.key === focusKey)) : 0;
     }
     else if (key === '\r' || key === '\n') {
-      if (checked.size === 0) continue;
+      if (buildPlan().length === 0) continue;
       break;
     }
 
     render();
   }
 
-  // Build plan
-  const selectedKeys = [...checked];
-  const plan = selectedKeys.map(k => {
-    const cat = sorted.find(c => c.key === k);
-    const action = (cat.defaultAction === 'Move' && flags.destAvailable) ? 'move' : 'delete';
-    return { key: k, label: cat.label, size: cat.size, action };
-  });
+  const plan = buildPlan();
+  const selectedKeys = plan.map(p => p.key);
 
   // Confirm screen
   screen.renderConfirm(version, plan);
