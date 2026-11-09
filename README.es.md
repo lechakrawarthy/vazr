@@ -23,7 +23,7 @@ Es una perspectiva fundamentalmente diferente. vazr está diseñado para desarro
 
 ## Vista previa de la TUI
 
-![vista previa de la interfaz de terminal de vazr](vazr_preview.jpeg)
+![vista previa de la interfaz de terminal de vazr](vazr_preview.png)
 
 ---
 
