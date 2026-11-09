@@ -43,7 +43,7 @@
     "bin/",
     "src/",
     "README.md",
-    "vazr_preview.jpeg"
+    "vazr_preview.png"
   ],
   "dependencies": {
     "chalk": "4.1.2",

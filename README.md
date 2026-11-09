@@ -23,7 +23,7 @@ That's a fundamentally different frame. vazr is built for developers who want su
 
 ## TUI Preview
 
-![vazr terminal UI preview](vazr_preview.jpeg)
+![vazr terminal UI preview](vazr_preview.png)
 
 ---
 
